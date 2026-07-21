@@ -1,0 +1,141 @@
+# Native macOS build for Notepad++ (Apple Silicon / Universal)
+# Usage:
+#   make -f Makefile.mac
+#   make -f Makefile.mac run
+#   make -f Makefile.mac dmg
+#   make -f Makefile.mac UNIVERSAL=1
+
+ROOT := $(CURDIR)
+BUILD := $(ROOT)/build/mac
+OBJ := $(BUILD)/obj
+APP := $(BUILD)/Notepad++.app
+MACOS_DIR := $(APP)/Contents/MacOS
+RES_DIR := $(APP)/Contents/Resources
+PLUGINS_DIR := $(APP)/Contents/PlugIns
+
+CXX ?= clang++
+MACOSX_DEPLOYMENT_TARGET ?= 12.0
+ARCH_FLAGS ?= -arch arm64
+ifdef UNIVERSAL
+ARCH_FLAGS := -arch arm64 -arch x86_64
+endif
+
+CPPFLAGS += -mmacosx-version-min=$(MACOSX_DEPLOYMENT_TARGET) $(ARCH_FLAGS) -DNDEBUG
+CXXFLAGS += -std=c++17 -fPIC -fobjc-arc -O2 -Wall -Wno-unused-parameter -Wno-deprecated-declarations
+LDFLAGS += $(ARCH_FLAGS) -mmacosx-version-min=$(MACOSX_DEPLOYMENT_TARGET)
+LIBS = -framework Cocoa -framework AppKit -framework QuartzCore -framework CoreText -framework Carbon
+
+SCI_INC := -I$(ROOT)/scintilla/include -I$(ROOT)/scintilla/src -I$(ROOT)/scintilla/cocoa
+LEX_INC := -I$(ROOT)/lexilla/include -I$(ROOT)/lexilla/lexlib -I$(ROOT)/scintilla/include
+APP_INC := -I$(ROOT)/PowerEditor/mac $(SCI_INC) $(LEX_INC)
+
+SCI_SRC := $(wildcard $(ROOT)/scintilla/src/*.cxx)
+SCI_COCOA := $(ROOT)/scintilla/cocoa/PlatCocoa.mm \
+	$(ROOT)/scintilla/cocoa/ScintillaCocoa.mm \
+	$(ROOT)/scintilla/cocoa/ScintillaView.mm \
+	$(ROOT)/scintilla/cocoa/InfoBar.mm
+
+LEX_SRC := $(ROOT)/lexilla/src/Lexilla.cxx \
+	$(wildcard $(ROOT)/lexilla/lexlib/*.cxx) \
+	$(wildcard $(ROOT)/lexilla/lexers/Lex*.cxx)
+
+APP_SRC := $(ROOT)/PowerEditor/mac/main.mm \
+	$(ROOT)/PowerEditor/mac/AppDelegate.mm \
+	$(ROOT)/PowerEditor/mac/MainWindowController.mm \
+	$(ROOT)/PowerEditor/mac/EditorDocument.mm \
+	$(ROOT)/PowerEditor/mac/LanguageMapper.mm \
+	$(ROOT)/PowerEditor/mac/FindReplaceController.mm \
+	$(ROOT)/PowerEditor/mac/PreferencesController.mm \
+	$(ROOT)/PowerEditor/mac/DocumentMapController.mm \
+	$(ROOT)/PowerEditor/mac/MacroRecorder.mm \
+	$(ROOT)/PowerEditor/mac/UDLManager.mm \
+	$(ROOT)/PowerEditor/mac/PluginHost.mm
+
+SCI_OBJS := $(patsubst $(ROOT)/scintilla/src/%.cxx,$(OBJ)/scintilla/%.o,$(SCI_SRC)) \
+	$(OBJ)/scintilla/PlatCocoa.o \
+	$(OBJ)/scintilla/ScintillaCocoa.o \
+	$(OBJ)/scintilla/ScintillaView.o \
+	$(OBJ)/scintilla/InfoBar.o
+
+LEX_OBJS := $(OBJ)/lexilla/Lexilla.o \
+	$(patsubst $(ROOT)/lexilla/lexlib/%.cxx,$(OBJ)/lexilla/lexlib/%.o,$(wildcard $(ROOT)/lexilla/lexlib/*.cxx)) \
+	$(patsubst $(ROOT)/lexilla/lexers/%.cxx,$(OBJ)/lexilla/lexers/%.o,$(filter-out $(ROOT)/lexilla/lexers/LexUser.cxx,$(wildcard $(ROOT)/lexilla/lexers/Lex*.cxx))) \
+	$(OBJ)/lexilla/LexUserStub.o
+
+$(OBJ)/lexilla/LexUserStub.o: $(ROOT)/PowerEditor/mac/LexUserStub.cxx | dirs
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(LEX_INC) -c $< -o $@
+
+APP_OBJS := $(patsubst $(ROOT)/PowerEditor/mac/%.mm,$(OBJ)/app/%.o,$(APP_SRC))
+
+LIBSCI := $(BUILD)/libscintilla.a
+LIBLEX := $(BUILD)/liblexilla.a
+BIN := $(MACOS_DIR)/NotepadPlusPlus
+
+.PHONY: all clean run app dmg sample-plugin dirs
+
+all: app sample-plugin
+
+dirs:
+	@mkdir -p $(OBJ)/scintilla $(OBJ)/lexilla/lexlib $(OBJ)/lexilla/lexers $(OBJ)/app
+	@mkdir -p $(MACOS_DIR) $(RES_DIR) $(PLUGINS_DIR)
+
+$(OBJ)/scintilla/%.o: $(ROOT)/scintilla/src/%.cxx | dirs
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(SCI_INC) -c $< -o $@
+
+$(OBJ)/scintilla/PlatCocoa.o: $(ROOT)/scintilla/cocoa/PlatCocoa.mm | dirs
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(SCI_INC) -c $< -o $@
+
+$(OBJ)/scintilla/ScintillaCocoa.o: $(ROOT)/scintilla/cocoa/ScintillaCocoa.mm | dirs
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(SCI_INC) -c $< -o $@
+
+$(OBJ)/scintilla/ScintillaView.o: $(ROOT)/scintilla/cocoa/ScintillaView.mm | dirs
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(SCI_INC) -c $< -o $@
+
+$(OBJ)/scintilla/InfoBar.o: $(ROOT)/scintilla/cocoa/InfoBar.mm | dirs
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(SCI_INC) -c $< -o $@
+
+$(OBJ)/lexilla/Lexilla.o: $(ROOT)/lexilla/src/Lexilla.cxx | dirs
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(LEX_INC) -c $< -o $@
+
+$(OBJ)/lexilla/lexlib/%.o: $(ROOT)/lexilla/lexlib/%.cxx | dirs
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(LEX_INC) -c $< -o $@
+
+$(OBJ)/lexilla/lexers/%.o: $(ROOT)/lexilla/lexers/%.cxx | dirs
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(LEX_INC) -c $< -o $@
+
+$(OBJ)/app/%.o: $(ROOT)/PowerEditor/mac/%.mm | dirs
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(APP_INC) -c $< -o $@
+
+$(LIBSCI): $(SCI_OBJS)
+	libtool -static -o $@ $^
+
+$(LIBLEX): $(LEX_OBJS)
+	libtool -static -o $@ $^
+
+$(BIN): $(APP_OBJS) $(LIBSCI) $(LIBLEX) | dirs
+	$(CXX) $(LDFLAGS) -o $@ $(APP_OBJS) $(LIBSCI) $(LIBLEX) $(LIBS)
+
+app: $(BIN)
+	cp $(ROOT)/PowerEditor/mac/Info.plist $(APP)/Contents/Info.plist
+	cp $(ROOT)/PowerEditor/mac/Resources/langs.xml $(RES_DIR)/ 2>/dev/null || true
+	cp $(ROOT)/PowerEditor/mac/Resources/stylers.xml $(RES_DIR)/ 2>/dev/null || true
+	@mkdir -p $(RES_DIR)/userDefineLangs
+	@if [ -d $(ROOT)/PowerEditor/bin/userDefineLangs ]; then \
+		cp -R $(ROOT)/PowerEditor/bin/userDefineLangs/ $(RES_DIR)/userDefineLangs/; \
+	fi
+	@echo "Built $(APP)"
+	@file $(BIN)
+
+sample-plugin: dirs
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -shared -o $(PLUGINS_DIR)/SamplePlugin.dylib \
+		$(ROOT)/PowerEditor/mac/Plugins/SamplePlugin.mm $(LDFLAGS) -framework Foundation
+	@echo "Built sample plugin"
+
+run: app
+	open "$(APP)"
+
+dmg: app
+	$(ROOT)/scripts/package-dmg.sh "$(APP)" "$(BUILD)/Notepad++-macOS.dmg"
+
+clean:
+	rm -rf $(BUILD)

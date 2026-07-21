@@ -1,0 +1,32 @@
+name: macOS Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Notepad++.app (arm64)
+        run: make -f Makefile.mac -j$(sysctl -n hw.ncpu)
+
+      - name: Verify binary architecture
+        run: |
+          file "build/mac/Notepad++.app/Contents/MacOS/NotepadPlusPlus"
+          lipo -info "build/mac/Notepad++.app/Contents/MacOS/NotepadPlusPlus" || true
+
+      - name: Package DMG
+        run: make -f Makefile.mac dmg
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NotepadPlusPlus-macOS
+          path: |
+            build/mac/Notepad++.app
+            build/mac/Notepad++-macOS.dmg

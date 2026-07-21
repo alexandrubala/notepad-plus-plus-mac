@@ -11,6 +11,28 @@ natural languages. Running in the MS Windows environment, its use is governed by
 
 See the [Notepad++ official site](https://notepad-plus-plus.org/) for more information.
 
+macOS (Apple Silicon) native build
+----------------------------------
+
+This fork includes a **native Cocoa** shell under `PowerEditor/mac/` that links
+Scintilla Cocoa + Lexilla and builds a `Notepad++.app` for Apple Silicon (and
+optionally Universal).
+
+```bash
+make -f Makefile.mac          # builds build/mac/Notepad++.app (arm64)
+make -f Makefile.mac run      # launch
+make -f Makefile.mac dmg      # create DMG
+make -f Makefile.mac UNIVERSAL=1   # arm64 + x86_64
+```
+
+Requires macOS 12+ and Xcode Command Line Tools (`clang++`). CMake is also
+supported via the root `CMakeLists.txt` if installed.
+
+Features in the Mac shell: multi-tab editing, Open/Save, Find/Replace, syntax
+highlighting, dark mode, status bar, preferences, split view, document map,
+macro record/playback, UDL data folder, and a `.dylib` plugin ABI
+(`NppMac_GetInfo` / `NppMac_Init` / `NppMac_Cleanup`).
+
 
 Notepad++ GPG Release Key
 -------------------------
@@ -47,4 +69,3 @@ Contribution
 Contributions are welcome. Be mindful of our [Contribution Rules](CONTRIBUTING.md) to increase the likelihood of your contribution getting accepted.
 
 [Notepad++ Contributors](https://github.com/notepad-plus-plus/notepad-plus-plus/graphs/contributors)
-
