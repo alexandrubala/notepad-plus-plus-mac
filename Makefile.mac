@@ -117,6 +117,7 @@ $(BIN): $(APP_OBJS) $(LIBSCI) $(LIBLEX) | dirs
 
 app: $(BIN)
 	cp $(ROOT)/PowerEditor/mac/Info.plist $(APP)/Contents/Info.plist
+	cp $(ROOT)/PowerEditor/mac/Resources/AppIcon.icns $(RES_DIR)/ 2>/dev/null || true
 	cp $(ROOT)/PowerEditor/mac/Resources/langs.xml $(RES_DIR)/ 2>/dev/null || true
 	cp $(ROOT)/PowerEditor/mac/Resources/stylers.xml $(RES_DIR)/ 2>/dev/null || true
 	@mkdir -p $(RES_DIR)/userDefineLangs
