@@ -18,6 +18,7 @@
 		_dirty = NO;
 		_wordWrap = NO;
 		_lineNumbersVisible = YES;
+		_textEncoding = NSUTF8StringEncoding;
 		[self configureDefaults];
 	}
 	return self;
@@ -34,6 +35,7 @@
 	[_editor setGeneralProperty:SCI_SETADDITIONALSELECTIONTYPING parameter:0 value:1];
 	[_editor setGeneralProperty:SCI_SETVIRTUALSPACEOPTIONS parameter:0 value:SCVS_RECTANGULARSELECTION];
 	[_editor setGeneralProperty:SCI_SETSCROLLWIDTHTRACKING parameter:0 value:1];
+	[_editor setGeneralProperty:SCI_SETEOLMODE parameter:0 value:SC_EOL_LF];
 
 	// Margins: 0 = symbols, 1 = line numbers, 2 = folding
 	[_editor setGeneralProperty:SCI_SETMARGINTYPEN parameter:0 value:SC_MARGIN_SYMBOL];
@@ -104,17 +106,44 @@
 	[_editor setGeneralProperty:SCI_COLOURISE parameter:0 value:-1];
 }
 
++ (NSArray<NSNumber *> *)loadEncodingCandidates
+{
+	return @[
+		@(NSUTF8StringEncoding),
+		@(NSUTF16LittleEndianStringEncoding),
+		@(NSUTF16BigEndianStringEncoding),
+		@(NSISOLatin1StringEncoding),
+		@(NSWindowsCP1252StringEncoding),
+		@(NSASCIIStringEncoding),
+	];
+}
+
 - (BOOL)loadFromPath:(NSString *)path error:(NSError **)error
 {
-	NSString *contents = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:error];
-	if (!contents) {
-		// Try Latin-1 fallback
-		NSData *data = [NSData dataWithContentsOfFile:path options:0 error:error];
-		if (!data) return NO;
-		contents = [[NSString alloc] initWithData:data encoding:NSISOLatin1StringEncoding];
-		if (!contents) return NO;
+	NSData *data = [NSData dataWithContentsOfFile:path options:0 error:error];
+	if (!data) return NO;
+
+	NSString *contents = nil;
+	NSStringEncoding used = NSUTF8StringEncoding;
+	for (NSNumber *encNum in [EditorDocument loadEncodingCandidates]) {
+		NSStringEncoding enc = (NSStringEncoding)encNum.unsignedLongValue;
+		NSString *tryStr = [[NSString alloc] initWithData:data encoding:enc];
+		if (!tryStr) continue;
+		contents = tryStr;
+		used = enc;
+		break;
 	}
+	if (!contents) {
+		if (error) {
+			*error = [NSError errorWithDomain:NSPOSIXErrorDomain code:EINVAL userInfo:@{
+				NSLocalizedDescriptionKey: @"Unable to decode file contents"
+			}];
+		}
+		return NO;
+	}
+
 	[_editor setString:contents];
+	self.textEncoding = used;
 	self.filePath = path;
 	self.displayName = path.lastPathComponent;
 	self.dirty = NO;
@@ -129,7 +158,7 @@
 - (BOOL)saveToPath:(NSString *)path error:(NSError **)error
 {
 	NSString *contents = [_editor string];
-	BOOL ok = [contents writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:error];
+	BOOL ok = [contents writeToFile:path atomically:YES encoding:self.textEncoding error:error];
 	if (ok) {
 		self.filePath = path;
 		self.displayName = path.lastPathComponent;
@@ -145,15 +174,144 @@
 	return ok;
 }
 
-- (NSString *)statusText
+- (NSString *)tabTitle
+{
+	NSString *name = self.displayName ?: @"Untitled";
+	return self.dirty ? [@"*" stringByAppendingString:name] : name;
+}
+
+- (NSString *)encodingDisplayName
+{
+	switch (self.textEncoding) {
+		case NSUTF8StringEncoding: return @"UTF-8";
+		case NSUTF16LittleEndianStringEncoding: return @"UTF-16 LE";
+		case NSUTF16BigEndianStringEncoding: return @"UTF-16 BE";
+		case NSUTF16StringEncoding: return @"UTF-16";
+		case NSISOLatin1StringEncoding: return @"ISO-8859-1";
+		case NSWindowsCP1252StringEncoding: return @"Windows-1252";
+		case NSASCIIStringEncoding: return @"ASCII";
+		default: {
+			CFStringRef cName = CFStringConvertEncodingToIANACharSetName(
+			    CFStringConvertNSStringEncodingToEncoding(self.textEncoding));
+			return cName ? (__bridge NSString *)cName : @"Unknown";
+		}
+	}
+}
+
+- (NSString *)eolDisplayName
+{
+	long mode = [_editor getGeneralProperty:SCI_GETEOLMODE];
+	switch (mode) {
+		case SC_EOL_CRLF: return @"Windows (CR LF)";
+		case SC_EOL_CR: return @"Macintosh (CR)";
+		case SC_EOL_LF:
+		default: return @"Unix (LF)";
+	}
+}
+
+- (NSString *)lengthStatusText
+{
+	long length = [_editor getGeneralProperty:SCI_GETLENGTH];
+	return [NSString stringWithFormat:@"length : %ld", length];
+}
+
+- (NSString *)positionStatusText
 {
 	long pos = [_editor getGeneralProperty:SCI_GETCURRENTPOS];
 	long line = [_editor getGeneralProperty:SCI_LINEFROMPOSITION parameter:pos] + 1;
 	long col = [_editor getGeneralProperty:SCI_GETCOLUMN parameter:pos] + 1;
-	long length = [_editor getGeneralProperty:SCI_GETLENGTH];
-	long lines = [_editor getGeneralProperty:SCI_GETLINECOUNT];
-	return [NSString stringWithFormat:@"Ln %ld, Col %ld    |    %@    |    UTF-8    |    %ld lines    |    %ld bytes",
-	        line, col, self.languageName, lines, length];
+	return [NSString stringWithFormat:@"Ln : %ld  Col : %ld  Pos : %ld", line, col, pos];
+}
+
+- (NSString *)insertModeStatusText
+{
+	return [self isOvertype] ? @"OVR" : @"INS";
+}
+
+- (BOOL)isOvertype
+{
+	return [_editor getGeneralProperty:SCI_GETOVERTYPE] != 0;
+}
+
+- (void)setOvertype:(BOOL)overtype
+{
+	[_editor setGeneralProperty:SCI_SETOVERTYPE parameter:0 value:overtype ? 1 : 0];
+}
+
+- (void)toggleOvertype
+{
+	[self setOvertype:![self isOvertype]];
+}
+
+- (void)setEncodingByName:(NSString *)name
+{
+	if ([name isEqualToString:@"UTF-8"]) {
+		self.textEncoding = NSUTF8StringEncoding;
+	} else if ([name isEqualToString:@"UTF-16 LE"]) {
+		self.textEncoding = NSUTF16LittleEndianStringEncoding;
+	} else if ([name isEqualToString:@"UTF-16 BE"]) {
+		self.textEncoding = NSUTF16BigEndianStringEncoding;
+	} else if ([name isEqualToString:@"ISO-8859-1"]) {
+		self.textEncoding = NSISOLatin1StringEncoding;
+	} else if ([name isEqualToString:@"Windows-1252"]) {
+		self.textEncoding = NSWindowsCP1252StringEncoding;
+	} else if ([name isEqualToString:@"ASCII"]) {
+		self.textEncoding = NSASCIIStringEncoding;
+	} else {
+		return;
+	}
+	self.dirty = YES;
+}
+
+- (void)convertToEOLMode:(int)eolMode
+{
+	[_editor setGeneralProperty:SCI_CONVERTEOLS parameter:0 value:eolMode];
+	[_editor setGeneralProperty:SCI_SETEOLMODE parameter:0 value:eolMode];
+	self.dirty = YES;
+}
+
+- (void)zoomIn
+{
+	[_editor message:SCI_ZOOMIN];
+}
+
+- (void)zoomOut
+{
+	[_editor message:SCI_ZOOMOUT];
+}
+
+- (void)zoomReset
+{
+	[_editor setGeneralProperty:SCI_SETZOOM parameter:0 value:0];
+}
+
+- (void)printDocument
+{
+	NSPrintInfo *info = [NSPrintInfo sharedPrintInfo];
+	info.horizontalPagination = NSPrintingPaginationModeFit;
+	info.verticalPagination = NSPrintingPaginationModeAutomatic;
+	info.horizontallyCentered = NO;
+	info.verticallyCentered = NO;
+
+	NSTextView *printView = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, info.paperSize.width - info.leftMargin - info.rightMargin, 100)];
+	printView.string = [_editor string] ?: @"";
+	printView.font = [NSFont userFixedPitchFontOfSize:10];
+	[printView sizeToFit];
+
+	NSPrintOperation *op = [NSPrintOperation printOperationWithView:printView printInfo:info];
+	op.showsPrintPanel = YES;
+	op.showsProgressPanel = YES;
+	[op runOperation];
+}
+
+- (NSString *)statusText
+{
+	return [NSString stringWithFormat:@"%@    |    %@    |    %@    |    %@    |    %@",
+	        [self positionStatusText],
+	        self.languageName,
+	        [self encodingDisplayName],
+	        [self eolDisplayName],
+	        [self insertModeStatusText]];
 }
 
 @end

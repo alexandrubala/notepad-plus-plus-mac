@@ -2,6 +2,7 @@
 #import "MainWindowController.h"
 #import "PreferencesController.h"
 #import "PluginHost.h"
+#import "Scintilla.h"
 
 @implementation AppDelegate
 
@@ -52,8 +53,12 @@
 	[fileMenu addItemWithTitle:@"Open…" action:@selector(openDocument:) keyEquivalent:@"o"];
 	[fileMenu addItemWithTitle:@"Save" action:@selector(saveDocument:) keyEquivalent:@"s"];
 	[fileMenu addItemWithTitle:@"Save As…" action:@selector(saveDocumentAs:) keyEquivalent:@"S"];
+	[fileMenu addItemWithTitle:@"Save All" action:@selector(saveAllDocuments:) keyEquivalent:@""];
+	[fileMenu addItem:[NSMenuItem separatorItem]];
+	[fileMenu addItemWithTitle:@"Print…" action:@selector(printDocument:) keyEquivalent:@"p"];
 	[fileMenu addItem:[NSMenuItem separatorItem]];
 	[fileMenu addItemWithTitle:@"Close Tab" action:@selector(closeDocument:) keyEquivalent:@"w"];
+	[fileMenu addItemWithTitle:@"Close All" action:@selector(closeAllDocuments:) keyEquivalent:@"W"];
 	[fileItem setSubmenu:fileMenu];
 
 	NSMenuItem *editItem = [[NSMenuItem alloc] init];
@@ -66,10 +71,6 @@
 	[editMenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
 	[editMenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
 	[editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
-	[editMenu addItem:[NSMenuItem separatorItem]];
-	[editMenu addItemWithTitle:@"Start Recording Macro" action:@selector(startMacroRecording:) keyEquivalent:@""];
-	[editMenu addItemWithTitle:@"Stop Recording Macro" action:@selector(stopMacroRecording:) keyEquivalent:@""];
-	[editMenu addItemWithTitle:@"Playback Macro" action:@selector(playbackMacro:) keyEquivalent:@""];
 	[editItem setSubmenu:editMenu];
 
 	NSMenuItem *searchItem = [[NSMenuItem alloc] init];
@@ -84,6 +85,10 @@
 	NSMenuItem *viewItem = [[NSMenuItem alloc] init];
 	[menubar addItem:viewItem];
 	NSMenu *viewMenu = [[NSMenu alloc] initWithTitle:@"View"];
+	[viewMenu addItemWithTitle:@"Zoom In" action:@selector(zoomIn:) keyEquivalent:@"="];
+	[viewMenu addItemWithTitle:@"Zoom Out" action:@selector(zoomOut:) keyEquivalent:@"-"];
+	[viewMenu addItemWithTitle:@"Restore Default Zoom" action:@selector(zoomReset:) keyEquivalent:@"0"];
+	[viewMenu addItem:[NSMenuItem separatorItem]];
 	[viewMenu addItemWithTitle:@"Toggle Word Wrap" action:@selector(toggleWordWrap:) keyEquivalent:@""];
 	[viewMenu addItemWithTitle:@"Toggle Line Numbers" action:@selector(toggleLineNumbers:) keyEquivalent:@""];
 	[viewMenu addItemWithTitle:@"Toggle Split View" action:@selector(toggleSplitView:) keyEquivalent:@""];
@@ -92,6 +97,29 @@
 	[viewMenu addItemWithTitle:@"Enter Full Screen" action:@selector(toggleFullScreen:) keyEquivalent:@"f"];
 	viewMenu.itemArray.lastObject.keyEquivalentModifierMask = NSEventModifierFlagControl | NSEventModifierFlagCommand;
 	[viewItem setSubmenu:viewMenu];
+
+	NSMenuItem *encodingItem = [[NSMenuItem alloc] init];
+	[menubar addItem:encodingItem];
+	NSMenu *encodingMenu = [[NSMenu alloc] initWithTitle:@"Encoding"];
+	for (NSString *name in @[@"UTF-8", @"UTF-16 LE", @"UTF-16 BE", @"ISO-8859-1", @"Windows-1252", @"ASCII"]) {
+		NSMenuItem *mi = [encodingMenu addItemWithTitle:name action:@selector(setEncoding:) keyEquivalent:@""];
+		mi.representedObject = name;
+	}
+	[encodingItem setSubmenu:encodingMenu];
+
+	NSMenuItem *eolItem = [[NSMenuItem alloc] init];
+	[menubar addItem:eolItem];
+	NSMenu *eolMenu = [[NSMenu alloc] initWithTitle:@"EOL Conversion"];
+	NSArray *eolEntries = @[
+		@[@"Windows (CR LF)", @(SC_EOL_CRLF)],
+		@[@"Unix (LF)", @(SC_EOL_LF)],
+		@[@"Macintosh (CR)", @(SC_EOL_CR)],
+	];
+	for (NSArray *pair in eolEntries) {
+		NSMenuItem *mi = [eolMenu addItemWithTitle:pair[0] action:@selector(convertEOL:) keyEquivalent:@""];
+		mi.representedObject = pair[1];
+	}
+	[eolItem setSubmenu:eolMenu];
 
 	NSMenuItem *langItem = [[NSMenuItem alloc] init];
 	[menubar addItem:langItem];
@@ -110,6 +138,14 @@
 	[settingsMenu addItemWithTitle:@"Preferences…" action:@selector(showPreferences:) keyEquivalent:@""];
 	[settingsMenu addItemWithTitle:@"Plugin Admin…" action:@selector(showPluginAdmin:) keyEquivalent:@""];
 	[settingsItem setSubmenu:settingsMenu];
+
+	NSMenuItem *macroItem = [[NSMenuItem alloc] init];
+	[menubar addItem:macroItem];
+	NSMenu *macroMenu = [[NSMenu alloc] initWithTitle:@"Macro"];
+	[macroMenu addItemWithTitle:@"Start Recording" action:@selector(startMacroRecording:) keyEquivalent:@""];
+	[macroMenu addItemWithTitle:@"Stop Recording" action:@selector(stopMacroRecording:) keyEquivalent:@""];
+	[macroMenu addItemWithTitle:@"Playback" action:@selector(playbackMacro:) keyEquivalent:@""];
+	[macroItem setSubmenu:macroMenu];
 
 	NSMenuItem *windowItem = [[NSMenuItem alloc] init];
 	[menubar addItem:windowItem];

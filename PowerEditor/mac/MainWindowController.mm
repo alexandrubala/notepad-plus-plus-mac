@@ -8,11 +8,36 @@
 #import "ScintillaView.h"
 #import "Scintilla.h"
 
+static NSString * const kTBNew = @"TBNew";
+static NSString * const kTBOpen = @"TBOpen";
+static NSString * const kTBSave = @"TBSave";
+static NSString * const kTBSaveAll = @"TBSaveAll";
+static NSString * const kTBPrint = @"TBPrint";
+static NSString * const kTBCut = @"TBCut";
+static NSString * const kTBCopy = @"TBCopy";
+static NSString * const kTBPaste = @"TBPaste";
+static NSString * const kTBUndo = @"TBUndo";
+static NSString * const kTBRedo = @"TBRedo";
+static NSString * const kTBFind = @"TBFind";
+static NSString * const kTBReplace = @"TBReplace";
+static NSString * const kTBZoomIn = @"TBZoomIn";
+static NSString * const kTBZoomOut = @"TBZoomOut";
+static NSString * const kTBWrap = @"TBWrap";
+static NSString * const kTBDocMap = @"TBDocMap";
+static NSString * const kTBMacroStart = @"TBMacroStart";
+static NSString * const kTBMacroStop = @"TBMacroStop";
+static NSString * const kTBMacroPlay = @"TBMacroPlay";
+
 @interface MainWindowController () <ScintillaNotificationProtocol>
 @property (nonatomic, strong) NSMutableArray<EditorDocument *> *documents;
 @property (nonatomic, strong) ScintillaView *splitEditor;
 @property (nonatomic, strong) NSView *editorHost;
 @property (nonatomic, strong) NSLayoutConstraint *mapWidthConstraint;
+@property (nonatomic, strong) NSButton *statusLengthBtn;
+@property (nonatomic, strong) NSButton *statusPosBtn;
+@property (nonatomic, strong) NSButton *statusEOLBtn;
+@property (nonatomic, strong) NSButton *statusEncodingBtn;
+@property (nonatomic, strong) NSButton *statusInsBtn;
 @end
 
 @implementation MainWindowController
@@ -40,6 +65,7 @@
 		_documentMapVisible = NO;
 		window.delegate = self;
 		[self buildUI];
+		[self buildToolbar];
 		[self newDocument:nil];
 		[[NSNotificationCenter defaultCenter] addObserver:self
 		                                         selector:@selector(appearanceChanged:)
@@ -73,19 +99,63 @@
 	}
 }
 
+#pragma mark - Status bar helpers
+
+- (NSButton *)makeStatusSegmentWithAction:(SEL)action
+{
+	NSButton *btn = [NSButton buttonWithTitle:@"" target:self action:action];
+	btn.bezelStyle = NSBezelStyleInline;
+	btn.bordered = NO;
+	btn.font = [NSFont monospacedDigitSystemFontOfSize:11 weight:NSFontWeightRegular];
+	btn.alignment = NSTextAlignmentCenter;
+	btn.translatesAutoresizingMaskIntoConstraints = NO;
+	[btn.heightAnchor constraintEqualToConstant:20].active = YES;
+	return btn;
+}
+
+- (NSView *)makeStatusSeparator
+{
+	NSBox *box = [[NSBox alloc] initWithFrame:NSZeroRect];
+	box.boxType = NSBoxSeparator;
+	box.translatesAutoresizingMaskIntoConstraints = NO;
+	[box.widthAnchor constraintEqualToConstant:1].active = YES;
+	[box.heightAnchor constraintEqualToConstant:14].active = YES;
+	return box;
+}
+
 - (void)buildUI
 {
 	NSView *content = self.window.contentView;
 
+	self.statusLengthBtn = [self makeStatusSegmentWithAction:nil];
+	self.statusPosBtn = [self makeStatusSegmentWithAction:nil];
+	self.statusEOLBtn = [self makeStatusSegmentWithAction:@selector(statusEOLClicked:)];
+	self.statusEncodingBtn = [self makeStatusSegmentWithAction:@selector(statusEncodingClicked:)];
+	self.statusInsBtn = [self makeStatusSegmentWithAction:@selector(toggleOvertype:)];
+
+	self.statusStack = [NSStackView stackViewWithViews:@[
+		self.statusLengthBtn,
+		[self makeStatusSeparator],
+		self.statusPosBtn,
+		[self makeStatusSeparator],
+		self.statusEOLBtn,
+		[self makeStatusSeparator],
+		self.statusEncodingBtn,
+		[self makeStatusSeparator],
+		self.statusInsBtn,
+	]];
+	self.statusStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+	self.statusStack.alignment = NSLayoutAttributeCenterY;
+	self.statusStack.spacing = 6;
+	self.statusStack.edgeInsets = NSEdgeInsetsMake(2, 8, 2, 8);
+	self.statusStack.translatesAutoresizingMaskIntoConstraints = NO;
+	self.statusStack.wantsLayer = YES;
+	self.statusStack.layer.backgroundColor = [NSColor windowBackgroundColor].CGColor;
+	[content addSubview:self.statusStack];
+
+	// Keep statusLabel for any legacy callers; hide it.
 	self.statusLabel = [[NSTextField alloc] initWithFrame:NSZeroRect];
-	self.statusLabel.editable = NO;
-	self.statusLabel.bezeled = NO;
-	self.statusLabel.drawsBackground = YES;
-	self.statusLabel.backgroundColor = [NSColor windowBackgroundColor];
-	self.statusLabel.font = [NSFont monospacedDigitSystemFontOfSize:11 weight:NSFontWeightRegular];
-	self.statusLabel.stringValue = @"Ready";
-	self.statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
-	[content addSubview:self.statusLabel];
+	self.statusLabel.hidden = YES;
 
 	self.tabView = [[NSTabView alloc] initWithFrame:NSZeroRect];
 	self.tabView.tabViewType = NSTopTabsBezelBorder;
@@ -113,17 +183,114 @@
 		[self.tabView.topAnchor constraintEqualToAnchor:content.topAnchor constant:0],
 		[self.tabView.leadingAnchor constraintEqualToAnchor:content.leadingAnchor],
 		[self.tabView.trailingAnchor constraintEqualToAnchor:self.documentMapContainer.leadingAnchor],
-		[self.tabView.bottomAnchor constraintEqualToAnchor:self.statusLabel.topAnchor],
+		[self.tabView.bottomAnchor constraintEqualToAnchor:self.statusStack.topAnchor],
 		[self.documentMapContainer.topAnchor constraintEqualToAnchor:content.topAnchor],
 		[self.documentMapContainer.trailingAnchor constraintEqualToAnchor:content.trailingAnchor],
-		[self.documentMapContainer.bottomAnchor constraintEqualToAnchor:self.statusLabel.topAnchor],
+		[self.documentMapContainer.bottomAnchor constraintEqualToAnchor:self.statusStack.topAnchor],
 		self.mapWidthConstraint,
-		[self.statusLabel.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:8],
-		[self.statusLabel.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-8],
-		[self.statusLabel.bottomAnchor constraintEqualToAnchor:content.bottomAnchor constant:-2],
-		[self.statusLabel.heightAnchor constraintEqualToConstant:22],
+		[self.statusStack.leadingAnchor constraintEqualToAnchor:content.leadingAnchor],
+		[self.statusStack.trailingAnchor constraintEqualToAnchor:content.trailingAnchor],
+		[self.statusStack.bottomAnchor constraintEqualToAnchor:content.bottomAnchor],
+		[self.statusStack.heightAnchor constraintEqualToConstant:24],
 	]];
 }
+
+#pragma mark - Toolbar
+
+- (NSToolbarItem *)toolbarItemWithId:(NSString *)itemId
+                               label:(NSString *)label
+                             symbol:(NSString *)symbol
+                             action:(SEL)action
+{
+	NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:itemId];
+	item.label = label;
+	item.paletteLabel = label;
+	item.toolTip = label;
+	item.target = self;
+	item.action = action;
+	item.image = [NSImage imageWithSystemSymbolName:symbol accessibilityDescription:label];
+	return item;
+}
+
+- (void)buildToolbar
+{
+	NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:@"NppMacToolbar"];
+	toolbar.delegate = self;
+	toolbar.displayMode = NSToolbarDisplayModeIconOnly;
+	toolbar.allowsUserCustomization = YES;
+	toolbar.autosavesConfiguration = YES;
+	self.window.toolbar = toolbar;
+}
+
+- (NSArray<NSToolbarItemIdentifier> *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar
+{
+	return @[
+		kTBNew, kTBOpen, kTBSave, kTBSaveAll, kTBPrint,
+		NSToolbarSpaceItemIdentifier,
+		kTBCut, kTBCopy, kTBPaste,
+		NSToolbarSpaceItemIdentifier,
+		kTBUndo, kTBRedo,
+		NSToolbarSpaceItemIdentifier,
+		kTBFind, kTBReplace,
+		NSToolbarSpaceItemIdentifier,
+		kTBZoomIn, kTBZoomOut,
+		NSToolbarSpaceItemIdentifier,
+		kTBWrap, kTBDocMap,
+		NSToolbarSpaceItemIdentifier,
+		kTBMacroStart, kTBMacroStop, kTBMacroPlay,
+		NSToolbarFlexibleSpaceItemIdentifier,
+	];
+}
+
+- (NSArray<NSToolbarItemIdentifier> *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar
+{
+	return [self toolbarDefaultItemIdentifiers:toolbar];
+}
+
+- (NSToolbarItem *)toolbar:(NSToolbar *)toolbar itemForItemIdentifier:(NSToolbarItemIdentifier)itemIdentifier willBeInsertedIntoToolbar:(BOOL)flag
+{
+	if ([itemIdentifier isEqualToString:kTBNew])
+		return [self toolbarItemWithId:kTBNew label:@"New" symbol:@"doc.badge.plus" action:@selector(newDocument:)];
+	if ([itemIdentifier isEqualToString:kTBOpen])
+		return [self toolbarItemWithId:kTBOpen label:@"Open" symbol:@"folder" action:@selector(openDocument:)];
+	if ([itemIdentifier isEqualToString:kTBSave])
+		return [self toolbarItemWithId:kTBSave label:@"Save" symbol:@"square.and.arrow.down" action:@selector(saveDocument:)];
+	if ([itemIdentifier isEqualToString:kTBSaveAll])
+		return [self toolbarItemWithId:kTBSaveAll label:@"Save All" symbol:@"square.and.arrow.down.on.square" action:@selector(saveAllDocuments:)];
+	if ([itemIdentifier isEqualToString:kTBPrint])
+		return [self toolbarItemWithId:kTBPrint label:@"Print" symbol:@"printer" action:@selector(printDocument:)];
+	if ([itemIdentifier isEqualToString:kTBCut])
+		return [self toolbarItemWithId:kTBCut label:@"Cut" symbol:@"scissors" action:@selector(cut:)];
+	if ([itemIdentifier isEqualToString:kTBCopy])
+		return [self toolbarItemWithId:kTBCopy label:@"Copy" symbol:@"doc.on.doc" action:@selector(copy:)];
+	if ([itemIdentifier isEqualToString:kTBPaste])
+		return [self toolbarItemWithId:kTBPaste label:@"Paste" symbol:@"doc.on.clipboard" action:@selector(paste:)];
+	if ([itemIdentifier isEqualToString:kTBUndo])
+		return [self toolbarItemWithId:kTBUndo label:@"Undo" symbol:@"arrow.uturn.backward" action:@selector(undo:)];
+	if ([itemIdentifier isEqualToString:kTBRedo])
+		return [self toolbarItemWithId:kTBRedo label:@"Redo" symbol:@"arrow.uturn.forward" action:@selector(redo:)];
+	if ([itemIdentifier isEqualToString:kTBFind])
+		return [self toolbarItemWithId:kTBFind label:@"Find" symbol:@"magnifyingglass" action:@selector(showFind:)];
+	if ([itemIdentifier isEqualToString:kTBReplace])
+		return [self toolbarItemWithId:kTBReplace label:@"Replace" symbol:@"arrow.triangle.2.circlepath" action:@selector(showReplace:)];
+	if ([itemIdentifier isEqualToString:kTBZoomIn])
+		return [self toolbarItemWithId:kTBZoomIn label:@"Zoom In" symbol:@"plus.magnifyingglass" action:@selector(zoomIn:)];
+	if ([itemIdentifier isEqualToString:kTBZoomOut])
+		return [self toolbarItemWithId:kTBZoomOut label:@"Zoom Out" symbol:@"minus.magnifyingglass" action:@selector(zoomOut:)];
+	if ([itemIdentifier isEqualToString:kTBWrap])
+		return [self toolbarItemWithId:kTBWrap label:@"Word Wrap" symbol:@"text.alignleft" action:@selector(toggleWordWrap:)];
+	if ([itemIdentifier isEqualToString:kTBDocMap])
+		return [self toolbarItemWithId:kTBDocMap label:@"Document Map" symbol:@"sidebar.right" action:@selector(toggleDocumentMap:)];
+	if ([itemIdentifier isEqualToString:kTBMacroStart])
+		return [self toolbarItemWithId:kTBMacroStart label:@"Start Recording" symbol:@"record.circle" action:@selector(startMacroRecording:)];
+	if ([itemIdentifier isEqualToString:kTBMacroStop])
+		return [self toolbarItemWithId:kTBMacroStop label:@"Stop Recording" symbol:@"stop.circle" action:@selector(stopMacroRecording:)];
+	if ([itemIdentifier isEqualToString:kTBMacroPlay])
+		return [self toolbarItemWithId:kTBMacroPlay label:@"Playback Macro" symbol:@"play.circle" action:@selector(playbackMacro:)];
+	return nil;
+}
+
+#pragma mark - Documents
 
 - (EditorDocument *)currentDocument
 {
@@ -138,7 +305,7 @@
 {
 	[self.documents addObject:doc];
 	NSTabViewItem *item = [[NSTabViewItem alloc] initWithIdentifier:doc];
-	item.label = doc.displayName;
+	item.label = [doc tabTitle];
 	NSView *host = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600)];
 	doc.editor.frame = host.bounds;
 	doc.editor.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
@@ -170,7 +337,6 @@
 
 - (void)openPath:(NSString *)path
 {
-	// Reuse existing tab if open
 	for (NSInteger i = 0; i < (NSInteger)self.documents.count; i++) {
 		EditorDocument *d = self.documents[i];
 		if ([d.filePath isEqualToString:path]) {
@@ -229,6 +395,29 @@
 	}
 }
 
+- (void)saveAllDocuments:(id)sender
+{
+	for (NSInteger i = 0; i < (NSInteger)self.documents.count; i++) {
+		EditorDocument *doc = self.documents[i];
+		if (!doc.dirty) continue;
+		[self.tabView selectTabViewItemAtIndex:i];
+		if (!doc.filePath) {
+			[self saveDocumentAs:nil];
+			if (doc.dirty) return;
+		} else {
+			NSError *error = nil;
+			if (![doc saveToPath:doc.filePath error:&error]) {
+				NSAlert *alert = [[NSAlert alloc] init];
+				alert.messageText = @"Could not save file";
+				alert.informativeText = error.localizedDescription;
+				[alert runModal];
+				return;
+			}
+		}
+	}
+	[self updateTabLabels];
+}
+
 - (BOOL)confirmCloseDocument:(EditorDocument *)doc
 {
 	if (!doc.dirty) return YES;
@@ -262,12 +451,29 @@
 	[self updateWindowTitle];
 }
 
+- (void)closeAllDocuments:(id)sender
+{
+	while (self.documents.count > 0) {
+		EditorDocument *doc = self.documents[0];
+		[self.tabView selectTabViewItemAtIndex:0];
+		if (![self confirmCloseDocument:doc]) return;
+		[self.tabView removeTabViewItem:[self.tabView tabViewItemAtIndex:0]];
+		[self.documents removeObjectAtIndex:0];
+	}
+	[self newDocument:nil];
+}
+
+- (void)printDocument:(id)sender
+{
+	[[self currentDocument] printDocument];
+}
+
 - (void)updateTabLabels
 {
 	for (NSInteger i = 0; i < (NSInteger)self.documents.count; i++) {
 		EditorDocument *doc = self.documents[i];
 		NSTabViewItem *item = [self.tabView tabViewItemAtIndex:i];
-		item.label = doc.dirty ? [doc.displayName stringByAppendingString:@" •"] : doc.displayName;
+		item.label = [doc tabTitle];
 	}
 	[self updateWindowTitle];
 }
@@ -286,11 +492,14 @@
 - (void)updateStatus:(NSTimer *)timer
 {
 	EditorDocument *doc = [self currentDocument];
-	if (doc) {
-		self.statusLabel.stringValue = [doc statusText];
-		if (self.documentMapVisible) {
-			[self.documentMap syncFromEditor:doc.editor];
-		}
+	if (!doc) return;
+	self.statusLengthBtn.title = [doc lengthStatusText];
+	self.statusPosBtn.title = [doc positionStatusText];
+	self.statusEOLBtn.title = [doc eolDisplayName];
+	self.statusEncodingBtn.title = [doc encodingDisplayName];
+	self.statusInsBtn.title = [doc insertModeStatusText];
+	if (self.documentMapVisible) {
+		[self.documentMap syncFromEditor:doc.editor];
 	}
 }
 
@@ -336,6 +545,68 @@
 - (void)showReplace:(id)sender { [self.findController showReplace]; }
 - (void)findNext:(id)sender { [self.findController findNext]; }
 - (void)findPrevious:(id)sender { [self.findController findPrevious]; }
+
+- (void)zoomIn:(id)sender { [[self currentDocument] zoomIn]; }
+- (void)zoomOut:(id)sender { [[self currentDocument] zoomOut]; }
+- (void)zoomReset:(id)sender { [[self currentDocument] zoomReset]; }
+
+- (void)toggleOvertype:(id)sender
+{
+	[[self currentDocument] toggleOvertype];
+	[self updateStatus:nil];
+}
+
+- (void)setEncoding:(id)sender
+{
+	NSMenuItem *item = (NSMenuItem *)sender;
+	NSString *name = item.representedObject ?: item.title;
+	EditorDocument *doc = [self currentDocument];
+	if (!doc || !name) return;
+	[doc setEncodingByName:name];
+	[self updateTabLabels];
+	[self updateStatus:nil];
+}
+
+- (void)convertEOL:(id)sender
+{
+	NSMenuItem *item = (NSMenuItem *)sender;
+	NSNumber *modeNum = item.representedObject;
+	if (![modeNum isKindOfClass:[NSNumber class]]) return;
+	EditorDocument *doc = [self currentDocument];
+	if (!doc) return;
+	[doc convertToEOLMode:modeNum.intValue];
+	[self updateTabLabels];
+	[self updateStatus:nil];
+}
+
+- (void)statusEOLClicked:(id)sender
+{
+	NSMenu *menu = [[NSMenu alloc] initWithTitle:@"EOL"];
+	NSArray *items = @[
+		@[@"Windows (CR LF)", @(SC_EOL_CRLF)],
+		@[@"Unix (LF)", @(SC_EOL_LF)],
+		@[@"Macintosh (CR)", @(SC_EOL_CR)],
+	];
+	for (NSArray *pair in items) {
+		NSMenuItem *mi = [menu addItemWithTitle:pair[0] action:@selector(convertEOL:) keyEquivalent:@""];
+		mi.target = self;
+		mi.representedObject = pair[1];
+	}
+	NSButton *btn = (NSButton *)sender;
+	[menu popUpMenuPositioningItem:nil atLocation:NSMakePoint(0, btn.bounds.size.height) inView:btn];
+}
+
+- (void)statusEncodingClicked:(id)sender
+{
+	NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Encoding"];
+	for (NSString *name in @[@"UTF-8", @"UTF-16 LE", @"UTF-16 BE", @"ISO-8859-1", @"Windows-1252", @"ASCII"]) {
+		NSMenuItem *mi = [menu addItemWithTitle:name action:@selector(setEncoding:) keyEquivalent:@""];
+		mi.target = self;
+		mi.representedObject = name;
+	}
+	NSButton *btn = (NSButton *)sender;
+	[menu popUpMenuPositioningItem:nil atLocation:NSMakePoint(0, btn.bounds.size.height) inView:btn];
+}
 
 - (void)toggleWordWrap:(id)sender
 {

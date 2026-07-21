@@ -6,9 +6,10 @@
 @class DocumentMapController;
 @class MacroRecorder;
 
-@interface MainWindowController : NSWindowController <NSWindowDelegate, NSTabViewDelegate>
+@interface MainWindowController : NSWindowController <NSWindowDelegate, NSTabViewDelegate, NSToolbarDelegate>
 @property (nonatomic, strong) NSTabView *tabView;
 @property (nonatomic, strong) NSTextField *statusLabel;
+@property (nonatomic, strong) NSStackView *statusStack;
 @property (nonatomic, strong) NSSplitView *splitView;
 @property (nonatomic, strong) NSView *documentMapContainer;
 @property (nonatomic, strong) FindReplaceController *findController;
@@ -23,5 +24,8 @@
 - (void)openDocument:(id)sender;
 - (void)saveDocument:(id)sender;
 - (void)saveDocumentAs:(id)sender;
+- (void)saveAllDocuments:(id)sender;
 - (void)closeDocument:(id)sender;
+- (void)closeAllDocuments:(id)sender;
+- (void)printDocument:(id)sender;
 @end
