@@ -44,7 +44,9 @@
 		NSString *path = [dir stringByAppendingPathComponent:file];
 		void *handle = dlopen(path.fileSystemRepresentation, RTLD_NOW);
 		if (!handle) {
+#ifndef NDEBUG
 			NSLog(@"Plugin load failed %@: %s", path, dlerror());
+#endif
 			continue;
 		}
 		NppMacGetInfoFn getInfo = (NppMacGetInfoFn)dlsym(handle, NPP_MAC_PLUGIN_GETINFO);
@@ -65,6 +67,19 @@
 - (NSArray<NSDictionary *> *)loadedPlugins
 {
 	return [_plugins copy];
+}
+
+- (void)unloadAllPlugins
+{
+	for (NSValue *value in _handles) {
+		void *handle = value.pointerValue;
+		if (!handle) continue;
+		NppMacCleanupFn cleanup = (NppMacCleanupFn)dlsym(handle, NPP_MAC_PLUGIN_CLEANUP);
+		if (cleanup) cleanup();
+		dlclose(handle);
+	}
+	[_handles removeAllObjects];
+	[_plugins removeAllObjects];
 }
 
 - (void)showAdminPanel

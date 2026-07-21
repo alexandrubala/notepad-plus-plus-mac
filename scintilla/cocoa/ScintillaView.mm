@@ -1379,8 +1379,10 @@ static NSCursor *cursorFromEnum(Window::Cursor cursor) {
 
 	if (mDelegate != nil) {
 		[mDelegate notification: scn];
+		// Still handle Zoom, UpdateUI, and MarginClick (fold toggles) locally.
 		if (scn->nmhdr.code != static_cast<unsigned int>(Notification::Zoom) &&
-		    scn->nmhdr.code != static_cast<unsigned int>(Notification::UpdateUI))
+		    scn->nmhdr.code != static_cast<unsigned int>(Notification::UpdateUI) &&
+		    scn->nmhdr.code != static_cast<unsigned int>(Notification::MarginClick))
 			return;
 	}
 

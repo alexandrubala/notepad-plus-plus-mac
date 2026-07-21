@@ -31,8 +31,6 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 
 @interface MainWindowController () <ScintillaNotificationProtocol>
 @property (nonatomic, strong) NSMutableArray<EditorDocument *> *documents;
-@property (nonatomic, strong) ScintillaView *splitEditor;
-@property (nonatomic, strong) NSView *editorHost;
 @property (nonatomic, strong) NSLayoutConstraint *mapWidthConstraint;
 @property (nonatomic, strong) NSButton *statusLengthBtn;
 @property (nonatomic, strong) NSButton *statusPosBtn;
@@ -62,7 +60,6 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 		_findController.target = self;
 		_macroRecorder = [[MacroRecorder alloc] init];
 		_documentMap = [[DocumentMapController alloc] init];
-		_splitEnabled = NO;
 		_documentMapVisible = NO;
 		window.delegate = self;
 		[self buildUI];
@@ -171,10 +168,6 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 	self.statusStack.wantsLayer = YES;
 	self.statusStack.layer.backgroundColor = [NSColor windowBackgroundColor].CGColor;
 	[content addSubview:self.statusStack];
-
-	// Keep statusLabel for any legacy callers; hide it.
-	self.statusLabel = [[NSTextField alloc] initWithFrame:NSZeroRect];
-	self.statusLabel.hidden = YES;
 
 	self.tabView = [[NSTabView alloc] initWithFrame:NSZeroRect];
 	self.tabView.tabViewType = NSTopTabsBezelBorder;
@@ -356,10 +349,16 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 
 - (void)openPath:(NSString *)path
 {
+	[self openPath:path caret:NSNotFound firstVisibleLine:NSNotFound];
+}
+
+- (void)openPath:(NSString *)path caret:(NSInteger)caret firstVisibleLine:(NSInteger)firstVisibleLine
+{
 	for (NSInteger i = 0; i < (NSInteger)self.documents.count; i++) {
 		EditorDocument *d = self.documents[i];
 		if ([d.filePath isEqualToString:path]) {
 			[self.tabView selectTabViewItemAtIndex:i];
+			[self restoreViewStateForDocument:d caret:caret firstVisibleLine:firstVisibleLine];
 			return;
 		}
 	}
@@ -374,6 +373,18 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 	}
 	[self addDocument:doc];
 	[SessionStore addRecentFile:path];
+	[self restoreViewStateForDocument:doc caret:caret firstVisibleLine:firstVisibleLine];
+}
+
+- (void)restoreViewStateForDocument:(EditorDocument *)doc caret:(NSInteger)caret firstVisibleLine:(NSInteger)firstVisibleLine
+{
+	if (!doc.editor) return;
+	if (caret != NSNotFound && caret >= 0) {
+		[doc.editor setGeneralProperty:SCI_GOTOPOS parameter:0 value:caret];
+	}
+	if (firstVisibleLine != NSNotFound && firstVisibleLine >= 0) {
+		[doc.editor setGeneralProperty:SCI_SETFIRSTVISIBLELINE parameter:0 value:firstVisibleLine];
+	}
 }
 
 - (BOOL)saveDocument:(id)sender
@@ -546,11 +557,17 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 		if (modType & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT)) {
 			doc.dirty = YES;
 			[self updateTabLabels];
-			if (self.macroRecorder.recording && (modType & SC_MOD_INSERTTEXT) && notification->text) {
-				NSString *text = [[NSString alloc] initWithBytes:notification->text
-				                                          length:notification->length
-				                                        encoding:NSUTF8StringEncoding];
-				if (text) [self.macroRecorder recordInsertText:text];
+			if (self.macroRecorder.recording) {
+				if ((modType & SC_MOD_INSERTTEXT) && notification->text) {
+					NSString *text = [[NSString alloc] initWithBytes:notification->text
+					                                          length:notification->length
+					                                        encoding:NSUTF8StringEncoding];
+					if (text) [self.macroRecorder recordInsertText:text];
+				} else if ((modType & SC_MOD_DELETETEXT) && notification->length > 0) {
+					[self.macroRecorder recordMessage:SCI_DELETERANGE
+					                           wParam:notification->position
+					                           lParam:notification->length];
+				}
 			}
 		}
 	}
@@ -672,33 +689,6 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 	[doc.editor setGeneralProperty:SCI_SETMARGINWIDTHN parameter:1 value:doc.lineNumbersVisible ? 48 : 0];
 }
 
-- (void)toggleSplitView:(id)sender
-{
-	EditorDocument *doc = [self currentDocument];
-	if (!doc) return;
-	NSTabViewItem *item = self.tabView.selectedTabViewItem;
-	NSView *host = item.view;
-	self.splitEnabled = !self.splitEnabled;
-	[host setSubviews:@[]];
-	if (self.splitEnabled) {
-		NSSplitView *split = [[NSSplitView alloc] initWithFrame:host.bounds];
-		split.vertical = YES;
-		split.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-		doc.editor.frame = NSMakeRect(0, 0, host.bounds.size.width / 2, host.bounds.size.height);
-		self.splitEditor = [[ScintillaView alloc] initWithFrame:doc.editor.frame];
-		[self.splitEditor setString:[doc.editor string]];
-		[split addSubview:doc.editor];
-		[split addSubview:self.splitEditor];
-		[host addSubview:split];
-		self.splitView = split;
-	} else {
-		doc.editor.frame = host.bounds;
-		[host addSubview:doc.editor];
-		self.splitEditor = nil;
-		self.splitView = nil;
-	}
-}
-
 - (void)toggleDocumentMap:(id)sender
 {
 	self.documentMapVisible = !self.documentMapVisible;
@@ -724,6 +714,30 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 - (void)stopMacroRecording:(id)sender { [self.macroRecorder stopRecording]; }
 - (void)playbackMacro:(id)sender { [self.macroRecorder playbackOnEditor:[self currentDocument].editor]; }
 
+- (BOOL)validateMenuItem:(NSMenuItem *)menuItem
+{
+	SEL action = menuItem.action;
+	BOOL hasDoc = [self currentDocument] != nil;
+	if (action == @selector(undo:) || action == @selector(redo:) ||
+	    action == @selector(cut:) || action == @selector(copy:) ||
+	    action == @selector(paste:) || action == @selector(selectAll:) ||
+	    action == @selector(showFind:) || action == @selector(showReplace:) ||
+	    action == @selector(findNext:) || action == @selector(findPrevious:) ||
+	    action == @selector(zoomIn:) || action == @selector(zoomOut:) ||
+	    action == @selector(zoomReset:) || action == @selector(toggleWordWrap:) ||
+	    action == @selector(toggleLineNumbers:) || action == @selector(toggleDocumentMap:) ||
+	    action == @selector(setEncoding:) || action == @selector(convertEOL:) ||
+	    action == @selector(setLanguage:) || action == @selector(saveDocument:) ||
+	    action == @selector(saveDocumentAs:) || action == @selector(printDocument:) ||
+	    action == @selector(closeDocument:) || action == @selector(playbackMacro:)) {
+		return hasDoc;
+	}
+	if (action == @selector(saveAllDocuments:) || action == @selector(closeAllDocuments:)) {
+		return self.documents.count > 0;
+	}
+	return YES;
+}
+
 - (BOOL)windowShouldClose:(NSWindow *)sender
 {
 	for (EditorDocument *doc in [self.documents copy]) {
@@ -746,13 +760,26 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 
 - (void)persistSession
 {
-	[SessionStore saveSessionPaths:[self openFilePaths]];
+	NSMutableArray *entries = [NSMutableArray array];
+	for (EditorDocument *doc in self.documents) {
+		if (doc.filePath.length == 0) continue;
+		long caret = [doc.editor getGeneralProperty:SCI_GETCURRENTPOS];
+		long first = [doc.editor getGeneralProperty:SCI_GETFIRSTVISIBLELINE];
+		[entries addObject:@{
+			@"path": doc.filePath,
+			@"caret": @(caret),
+			@"firstVisibleLine": @(first),
+		}];
+	}
+	[SessionStore saveSessionEntries:entries];
 }
 
 - (void)restoreSessionIfNeeded
 {
-	NSArray<NSString *> *paths = [SessionStore sessionPaths];
-	if (paths.count == 0) return;
+	if (![PreferencesController sharedController].restoreSessionOnLaunch) return;
+
+	NSArray<NSDictionary *> *entries = [SessionStore sessionEntries];
+	if (entries.count == 0) return;
 
 	BOOL hadOnlyBlank = (self.documents.count == 1
 	                     && self.documents[0].filePath == nil
@@ -760,9 +787,13 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 	                     && ([self.documents[0].editor string].length == 0));
 
 	NSUInteger opened = 0;
-	for (NSString *path in paths) {
+	for (NSDictionary *entry in entries) {
+		NSString *path = entry[@"path"];
+		if (![path isKindOfClass:[NSString class]] || path.length == 0) continue;
 		if (![[NSFileManager defaultManager] fileExistsAtPath:path]) continue;
-		[self openPath:path];
+		NSInteger caret = [entry[@"caret"] respondsToSelector:@selector(integerValue)] ? [entry[@"caret"] integerValue] : NSNotFound;
+		NSInteger first = [entry[@"firstVisibleLine"] respondsToSelector:@selector(integerValue)] ? [entry[@"firstVisibleLine"] integerValue] : NSNotFound;
+		[self openPath:path caret:caret firstVisibleLine:first];
 		opened++;
 	}
 
@@ -774,11 +805,6 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 			[self updateWindowTitle];
 		}
 	}
-}
-
-- (ScintillaView *)activeEditor
-{
-	return [self currentDocument].editor;
 }
 
 @end

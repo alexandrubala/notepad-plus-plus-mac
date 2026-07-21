@@ -37,5 +37,4 @@
 - (void)zoomOut;
 - (void)zoomReset;
 - (void)printDocument;
-- (NSString *)statusText;
 @end

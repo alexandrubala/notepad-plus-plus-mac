@@ -4,6 +4,7 @@
 @interface PluginHost : NSObject
 + (instancetype)sharedHost;
 - (void)loadPluginsFromBundle;
+- (void)unloadAllPlugins;
 - (NSArray<NSDictionary *> *)loadedPlugins;
 - (void)showAdminPanel;
 @end

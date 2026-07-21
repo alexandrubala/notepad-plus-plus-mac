@@ -13,6 +13,7 @@
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
+	[[PreferencesController sharedController] applyAppearancePreference];
 	[self createApplicationMenu];
 	[[PluginHost sharedHost] loadPluginsFromBundle];
 
@@ -25,6 +26,7 @@
 - (void)applicationWillTerminate:(NSNotification *)notification
 {
 	[self.mainWindowController persistSession];
+	[[PluginHost sharedHost] unloadAllPlugins];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
@@ -109,7 +111,6 @@
 	[viewMenu addItem:[NSMenuItem separatorItem]];
 	[viewMenu addItemWithTitle:@"Toggle Word Wrap" action:@selector(toggleWordWrap:) keyEquivalent:@""];
 	[viewMenu addItemWithTitle:@"Toggle Line Numbers" action:@selector(toggleLineNumbers:) keyEquivalent:@""];
-	[viewMenu addItemWithTitle:@"Toggle Split View" action:@selector(toggleSplitView:) keyEquivalent:@""];
 	[viewMenu addItemWithTitle:@"Toggle Document Map" action:@selector(toggleDocumentMap:) keyEquivalent:@""];
 	[viewMenu addItem:[NSMenuItem separatorItem]];
 	[viewMenu addItemWithTitle:@"Enter Full Screen" action:@selector(toggleFullScreen:) keyEquivalent:@"f"];
@@ -144,8 +145,8 @@
 	NSMenu *langMenu = [[NSMenu alloc] initWithTitle:@"Language"];
 	NSArray *langs = @[@"None", @"C++", @"C", @"C#", @"Python", @"JavaScript", @"TypeScript",
 	                   @"HTML", @"XML", @"CSS", @"JSON", @"Markdown", @"YAML",
-	                   @"Java", @"Swift", @"Rust", @"Go", @"Ruby", @"PHP",
-	                   @"Shell", @"SQL", @"UDL"];
+	                   @"Java", @"Swift", @"Rust", @"Go", @"Ruby", @"PHP", @"R",
+	                   @"Shell", @"SQL"];
 	for (NSString *name in langs) {
 		NSMenuItem *mi = [langMenu addItemWithTitle:name action:@selector(setLanguage:) keyEquivalent:@""];
 		mi.representedObject = name;
@@ -155,7 +156,6 @@
 	NSMenuItem *settingsItem = [[NSMenuItem alloc] init];
 	[menubar addItem:settingsItem];
 	NSMenu *settingsMenu = [[NSMenu alloc] initWithTitle:@"Settings"];
-	[settingsMenu addItemWithTitle:@"Preferences…" action:@selector(showPreferences:) keyEquivalent:@""];
 	[settingsMenu addItemWithTitle:@"Plugin Admin…" action:@selector(showPluginAdmin:) keyEquivalent:@""];
 	[settingsItem setSubmenu:settingsMenu];
 

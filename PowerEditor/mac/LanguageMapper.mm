@@ -2,8 +2,6 @@
 #import "ScintillaView.h"
 #import "Scintilla.h"
 #import "SciLexer.h"
-#import "ILexer.h"
-#import "Lexilla.h"
 
 @implementation LanguageMapper
 
@@ -68,7 +66,7 @@
 			@"Markdown": @"markdown", @"Java": @"java", @"Swift": @"swift",
 			@"Rust": @"rust", @"Go": @"go", @"Shell": @"bash", @"SQL": @"sql",
 			@"CSS": @"css", @"YAML": @"yaml", @"Ruby": @"ruby", @"PHP": @"phpscript",
-			@"C#": @"csharp", @"UDL": @"null"
+			@"C#": @"csharp", @"R": @"r"
 		};
 	});
 	return map[displayName] ?: @"null";

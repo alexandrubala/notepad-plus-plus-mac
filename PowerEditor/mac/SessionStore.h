@@ -5,6 +5,6 @@
 + (NSArray<NSString *> *)recentFiles;
 + (void)addRecentFile:(NSString *)path;
 + (void)clearRecentFiles;
-+ (NSArray<NSString *> *)sessionPaths;
-+ (void)saveSessionPaths:(NSArray<NSString *> *)paths;
++ (NSArray<NSDictionary *> *)sessionEntries;
++ (void)saveSessionEntries:(NSArray<NSDictionary *> *)entries;
 @end

@@ -1,6 +1,5 @@
 #import "MacroRecorder.h"
 #import "ScintillaView.h"
-#import "Scintilla.h"
 
 @implementation MacroAction
 @end

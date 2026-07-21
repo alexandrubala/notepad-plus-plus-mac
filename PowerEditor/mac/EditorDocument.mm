@@ -71,6 +71,10 @@
 
 - (BOOL)isDarkAppearance
 {
+	PreferencesController *prefs = [PreferencesController sharedController];
+	if (prefs.themeMode == NppMacThemeLight) return NO;
+	if (prefs.themeMode == NppMacThemeDark) return YES;
+
 	NSAppearance *appearance = NSApp.effectiveAppearance;
 	NSAppearanceName name = [appearance bestMatchFromAppearancesWithNames:
 	    @[NSAppearanceNameAqua, NSAppearanceNameDarkAqua]];
@@ -354,16 +358,6 @@
 	op.showsPrintPanel = YES;
 	op.showsProgressPanel = YES;
 	[op runOperation];
-}
-
-- (NSString *)statusText
-{
-	return [NSString stringWithFormat:@"%@    |    %@    |    %@    |    %@    |    %@",
-	        [self positionStatusText],
-	        self.languageName,
-	        [self encodingDisplayName],
-	        [self eolDisplayName],
-	        [self insertModeStatusText]];
 }
 
 @end

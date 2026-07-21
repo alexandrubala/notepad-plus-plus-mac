@@ -1,7 +1,8 @@
 #import "SessionStore.h"
 
 static NSString *const kRecentFilesKey = @"NppMacRecentFiles";
-static NSString *const kSessionPathsKey = @"NppMacSessionPaths";
+static NSString *const kSessionEntriesKey = @"NppMacSessionEntries";
+static NSString *const kLegacySessionPathsKey = @"NppMacSessionPaths";
 static const NSUInteger kMaxRecentFiles = 15;
 
 @implementation SessionStore
@@ -29,15 +30,29 @@ static const NSUInteger kMaxRecentFiles = 15;
 	[NSUserDefaults.standardUserDefaults removeObjectForKey:kRecentFilesKey];
 }
 
-+ (NSArray<NSString *> *)sessionPaths
++ (NSArray<NSDictionary *> *)sessionEntries
 {
-	NSArray *paths = [NSUserDefaults.standardUserDefaults stringArrayForKey:kSessionPathsKey];
-	return paths ?: @[];
+	NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+	NSArray *entries = [defaults arrayForKey:kSessionEntriesKey];
+	if ([entries isKindOfClass:[NSArray class]] && entries.count > 0) {
+		return entries;
+	}
+
+	// Migrate legacy path-only sessions.
+	NSArray *paths = [defaults stringArrayForKey:kLegacySessionPathsKey];
+	if (paths.count == 0) return @[];
+	NSMutableArray *migrated = [NSMutableArray arrayWithCapacity:paths.count];
+	for (NSString *path in paths) {
+		[migrated addObject:@{@"path": path, @"caret": @0, @"firstVisibleLine": @0}];
+	}
+	return migrated;
 }
 
-+ (void)saveSessionPaths:(NSArray<NSString *> *)paths
++ (void)saveSessionEntries:(NSArray<NSDictionary *> *)entries
 {
-	[NSUserDefaults.standardUserDefaults setObject:(paths ?: @[]) forKey:kSessionPathsKey];
+	NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+	[defaults setObject:(entries ?: @[]) forKey:kSessionEntriesKey];
+	[defaults removeObjectForKey:kLegacySessionPathsKey];
 }
 
 @end

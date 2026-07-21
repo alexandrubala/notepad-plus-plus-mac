@@ -69,14 +69,21 @@
 	self.statusLabel.textColor = [NSColor secondaryLabelColor];
 	[content addSubview:self.statusLabel];
 
-	NSButton *findBtn = [[NSButton alloc] initWithFrame:NSMakeRect(110, 10, 90, 28)];
+	NSButton *findPrevBtn = [[NSButton alloc] initWithFrame:NSMakeRect(20, 10, 110, 28)];
+	findPrevBtn.title = @"Find Previous";
+	findPrevBtn.bezelStyle = NSBezelStyleRounded;
+	findPrevBtn.target = self;
+	findPrevBtn.action = @selector(findPrevious);
+	[content addSubview:findPrevBtn];
+
+	NSButton *findBtn = [[NSButton alloc] initWithFrame:NSMakeRect(140, 10, 90, 28)];
 	findBtn.title = @"Find Next";
 	findBtn.bezelStyle = NSBezelStyleRounded;
 	findBtn.target = self;
 	findBtn.action = @selector(findNext);
 	[content addSubview:findBtn];
 
-	NSButton *replBtn = [[NSButton alloc] initWithFrame:NSMakeRect(210, 10, 90, 28)];
+	NSButton *replBtn = [[NSButton alloc] initWithFrame:NSMakeRect(240, 10, 80, 28)];
 	replBtn.title = @"Replace";
 	replBtn.bezelStyle = NSBezelStyleRounded;
 	replBtn.target = self;
@@ -84,7 +91,7 @@
 	replBtn.tag = 102;
 	[content addSubview:replBtn];
 
-	NSButton *replAllBtn = [[NSButton alloc] initWithFrame:NSMakeRect(310, 10, 100, 28)];
+	NSButton *replAllBtn = [[NSButton alloc] initWithFrame:NSMakeRect(330, 10, 100, 28)];
 	replAllBtn.title = @"Replace All";
 	replAllBtn.bezelStyle = NSBezelStyleRounded;
 	replAllBtn.target = self;

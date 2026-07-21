@@ -22,12 +22,16 @@ __attribute__((visibility("default"))) const NppMacPluginInfo *NppMac_GetInfo(vo
 
 __attribute__((visibility("default"))) void NppMac_Init(void)
 {
+#ifndef NDEBUG
 	NSLog(@"[SamplePlugin] initialized");
+#endif
 }
 
 __attribute__((visibility("default"))) void NppMac_Cleanup(void)
 {
+#ifndef NDEBUG
 	NSLog(@"[SamplePlugin] cleaned up");
+#endif
 }
 
 }
