@@ -99,8 +99,16 @@
 	}
 	[_editor setReferenceProperty:SCI_SETILEXER parameter:0 value:pLexer];
 
-	const char *kw = [LanguageMapper keywordsForLexer:lexer set:0];
-	[_editor setReferenceProperty:SCI_SETKEYWORDS parameter:0 value:kw];
+	for (int set = 0; set <= 5; set++) {
+		const char *kw = [LanguageMapper keywordsForLexer:lexer set:set];
+		if (kw && kw[0] != '\0') {
+			[_editor setReferenceProperty:SCI_SETKEYWORDS parameter:set value:kw];
+		}
+	}
+
+	if ([lexer isEqualToString:@"hypertext"] || [lexer isEqualToString:@"xml"]) {
+		[_editor message:SCI_SETPROPERTY wParam:(uptr_t)"fold.html" lParam:(sptr_t)"1"];
+	}
 
 	[self applyTheme];
 	[_editor setGeneralProperty:SCI_COLOURISE parameter:0 value:-1];

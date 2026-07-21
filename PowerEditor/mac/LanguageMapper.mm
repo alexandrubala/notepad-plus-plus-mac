@@ -67,6 +67,54 @@
 
 + (const char *)keywordsForLexer:(NSString *)lexer set:(int)set
 {
+	BOOL isHTML = [lexer isEqualToString:@"hypertext"] || [lexer isEqualToString:@"xml"];
+	if (isHTML) {
+		if (set == 0) {
+			return "^data- a abbr accept accept-charset accesskey acronym action address align "
+			       "alink alt applet archive area article aside async audio autocomplete autofocus "
+			       "axis b background base basefont bdi bdo bgcolor bgsound big blink blockquote "
+			       "body border br button canvas caption cellpadding cellspacing center char "
+			       "charoff charset checkbox checked cite class classid clear code codebase "
+			       "codetype col colgroup color cols colspan command compact content "
+			       "contenteditable contextmenu coords data datafld dataformatas datalist "
+			       "datapagesize datasrc datetime dd declare defer del details dfn dialog dir "
+			       "disabled div dl draggable dropzone dt element em embed enctype event face "
+			       "fieldset figcaption figure file font footer for form formaction formenctype "
+			       "formmethod formnovalidate formtarget frame frameborder frameset h1 h2 h3 h4 "
+			       "h5 h6 head header headers height hgroup hidden hr href hreflang hspace html "
+			       "http-equiv i id iframe image img input ins isindex ismap kbd keygen label "
+			       "lang language leftmargin legend li link list listing longdesc main manifest "
+			       "map marginheight marginwidth mark marquee max maxlength media menu menuitem "
+			       "meta meter method min minlength multicol multiple name nav nobr noembed "
+			       "noframes nohref noresize noscript noshade novalidate nowrap object ol onabort "
+			       "onafterprint onautocomplete onautocompleteerror onbeforeonload onbeforeprint "
+			       "onblur oncancel oncanplay oncanplaythrough onchange onclick onclose "
+			       "oncontextmenu oncuechange ondblclick ondrag ondragend ondragenter ondragleave "
+			       "ondragover ondragstart ondrop ondurationchange onemptied onended onerror "
+			       "onfocus onhashchange oninput oninvalid onkeydown onkeypress onkeyup onload "
+			       "onloadeddata onloadedmetadata onloadstart onmessage onmousedown onmouseenter "
+			       "onmouseleave onmousemove onmouseout onmouseover onmouseup onmousewheel "
+			       "onoffline ononline onpagehide onpageshow onpause onplay onplaying "
+			       "onpointercancel onpointerdown onpointerenter onpointerleave onpointerlockchange "
+			       "onpointerlockerror onpointermove onpointerout onpointerover onpointerup "
+			       "onpopstate onprogress onratechange onreadystatechange onredo onreset onresize "
+			       "onscroll onseeked onseeking onselect onshow onsort onstalled onstorage "
+			       "onsubmit onsuspend ontimeupdate ontoggle onundo onunload onvolumechange "
+			       "onwaiting optgroup option output p param password pattern picture placeholder "
+			       "plaintext pre profile progress prompt public q radio readonly rel required "
+			       "reset rev reversed role rows rowspan rp rt rtc ruby rules s samp sandbox "
+			       "scheme scope scoped script seamless section select selected shadow shape size "
+			       "sizes small source spacer span spellcheck src srcdoc srcset standby start "
+			       "step strike strong style sub submit summary sup svg svg:svg tabindex table "
+			       "target tbody td template text textarea tfoot th thead time title topmargin tr "
+			       "track tt type u ul usemap valign value valuetype var version video vlink "
+			       "vspace wbr width xml xmlns xmp";
+		}
+		if (set == 5) {
+			return "ATTLIST DOCTYPE ELEMENT ENTITY NOTATION";
+		}
+		return "";
+	}
 	if (set != 0) return "";
 	if ([lexer isEqualToString:@"cpp"]) {
 		return "alignas alignof and and_eq asm auto bitand bitor bool break case catch char "
@@ -151,6 +199,61 @@
 	int numberStyles[] = {4, SCE_C_NUMBER, SCE_P_NUMBER};
 	for (size_t i = 0; i < sizeof(numberStyles)/sizeof(numberStyles[0]); i++) {
 		[editor setColorProperty:SCI_STYLESETFORE parameter:numberStyles[i] value:number];
+	}
+
+	// HTML / XML use SCE_H_* style IDs that overlap C-family indices — override after generics
+	if ([lexer isEqualToString:@"hypertext"] || [lexer isEqualToString:@"xml"]) {
+		NSColor *tag = dark ? [NSColor colorWithCalibratedRed:0.45 green:0.7 blue:1.0 alpha:1]
+		                    : [NSColor colorWithCalibratedRed:0.0 green:0.0 blue:0.85 alpha:1];
+		NSColor *attr = dark ? [NSColor colorWithCalibratedRed:0.95 green:0.55 blue:0.45 alpha:1]
+		                     : [NSColor colorWithCalibratedRed:0.85 green:0.0 blue:0.0 alpha:1];
+		NSColor *entity = dark ? [NSColor colorWithCalibratedRed:0.85 green:0.75 blue:0.4 alpha:1]
+		                       : [NSColor colorWithCalibratedRed:0.5 green:0.35 blue:0.0 alpha:1];
+		NSColor *cdata = dark ? [NSColor colorWithCalibratedRed:0.95 green:0.65 blue:0.35 alpha:1]
+		                      : [NSColor colorWithCalibratedRed:0.9 green:0.45 blue:0.0 alpha:1];
+		NSColor *unknown = dark ? [NSColor colorWithCalibratedWhite:0.65 alpha:1]
+		                        : [NSColor colorWithCalibratedWhite:0.25 alpha:1];
+		NSColor *jsKeyword = keyword;
+		NSColor *jsComment = comment;
+		NSColor *jsString = string;
+		NSColor *jsNumber = number;
+
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_DEFAULT value:fg];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_TAG value:tag];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_TAGEND value:tag];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_TAGUNKNOWN value:unknown];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_ATTRIBUTE value:attr];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_ATTRIBUTEUNKNOWN value:unknown];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_NUMBER value:number];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_DOUBLESTRING value:string];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_SINGLESTRING value:string];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_OTHER value:fg];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_COMMENT value:comment];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_ENTITY value:entity];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_CDATA value:cdata];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_VALUE value:cdata];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_QUESTION value:tag];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_SGML_DEFAULT value:fg];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_SGML_COMMAND value:tag];
+		[editor setGeneralProperty:SCI_STYLESETBOLD parameter:SCE_H_SGML_COMMAND value:1];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_SGML_1ST_PARAM value:attr];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_SGML_DOUBLESTRING value:string];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_SGML_SIMPLESTRING value:string];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_SGML_COMMENT value:comment];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_H_SGML_BLOCK_DEFAULT value:fg];
+
+		// Embedded JavaScript inside <script>
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_HJ_DEFAULT value:fg];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_HJ_COMMENT value:jsComment];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_HJ_COMMENTLINE value:jsComment];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_HJ_COMMENTDOC value:jsComment];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_HJ_NUMBER value:jsNumber];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_HJ_WORD value:fg];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_HJ_KEYWORD value:jsKeyword];
+		[editor setGeneralProperty:SCI_STYLESETBOLD parameter:SCE_HJ_KEYWORD value:1];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_HJ_DOUBLESTRING value:jsString];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_HJ_SINGLESTRING value:jsString];
+		[editor setColorProperty:SCI_STYLESETFORE parameter:SCE_HJ_REGEX value:cdata];
 	}
 
 	[editor setColorProperty:SCI_STYLESETFORE parameter:STYLE_DEFAULT value:fg];
