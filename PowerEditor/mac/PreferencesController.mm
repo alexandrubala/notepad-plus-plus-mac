@@ -1,5 +1,7 @@
 #import "PreferencesController.h"
 
+NSNotificationName const NppMacPreferencesDidChangeNotification = @"NppMacPreferencesDidChangeNotification";
+
 static NSString *const kPrefFontSize = @"NppMacFontSize";
 static NSString *const kPrefTabWidth = @"NppMacTabWidth";
 static NSString *const kPrefUseTabs = @"NppMacUseTabs";
@@ -128,6 +130,7 @@ static NSString *const kPrefFontName = @"NppMacFontName";
 	self.useTabs = _useTabsCheck.state == NSControlStateValueOn;
 	self.wordWrap = _wordWrapCheck.state == NSControlStateValueOn;
 	[self savePreferences];
+	[[NSNotificationCenter defaultCenter] postNotificationName:NppMacPreferencesDidChangeNotification object:self];
 	[self.window close];
 }
 

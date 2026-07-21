@@ -2059,7 +2059,25 @@ static NSCursor *cursorFromEnum(Window::Cursor cursor) {
 				wholeWord: wholeWord
 				 scrollTo: scrollTo
 				     wrap: wrap
-				backwards: NO];
+				backwards: NO
+				    regex: NO];
+}
+
+//--------------------------------------------------------------------------------------------------
+
+- (BOOL) findAndHighlightText: (NSString *) searchText
+		    matchCase: (BOOL) matchCase
+		    wholeWord: (BOOL) wholeWord
+		     scrollTo: (BOOL) scrollTo
+			 wrap: (BOOL) wrap
+		    backwards: (BOOL) backwards {
+	return [self findAndHighlightText: searchText
+				matchCase: matchCase
+				wholeWord: wholeWord
+				 scrollTo: scrollTo
+				     wrap: wrap
+				backwards: backwards
+				    regex: NO];
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2074,12 +2092,15 @@ static NSCursor *cursorFromEnum(Window::Cursor cursor) {
 		    wholeWord: (BOOL) wholeWord
 		     scrollTo: (BOOL) scrollTo
 			 wrap: (BOOL) wrap
-		    backwards: (BOOL) backwards {
+		    backwards: (BOOL) backwards
+			   regex: (BOOL) regex {
 	FindOption searchFlags = FindOption::None;
 	if (matchCase)
 		searchFlags = searchFlags | FindOption::MatchCase;
 	if (wholeWord)
 		searchFlags = searchFlags | FindOption::WholeWord;
+	if (regex)
+		searchFlags = searchFlags | FindOption::RegExp;
 
 	long selectionStart = [self getGeneralProperty: SCI_GETSELECTIONSTART parameter: 0];
 	long selectionEnd = [self getGeneralProperty: SCI_GETSELECTIONEND parameter: 0];
@@ -2150,6 +2171,22 @@ static NSCursor *cursorFromEnum(Window::Cursor cursor) {
 		 matchCase: (BOOL) matchCase
 		 wholeWord: (BOOL) wholeWord
 		     doAll: (BOOL) doAll {
+	return [self findAndReplaceText: searchText
+				 byText: newText
+			      matchCase: matchCase
+			      wholeWord: wholeWord
+				  doAll: doAll
+				  regex: NO];
+}
+
+//--------------------------------------------------------------------------------------------------
+
+- (int) findAndReplaceText: (NSString *) searchText
+		    byText: (NSString *) newText
+		 matchCase: (BOOL) matchCase
+		 wholeWord: (BOOL) wholeWord
+		     doAll: (BOOL) doAll
+		     regex: (BOOL) regex {
 	// The current position is where we start searching for single occurrences. Otherwise we start at
 	// the beginning of the document.
 	long startPosition;
@@ -2165,6 +2202,8 @@ static NSCursor *cursorFromEnum(Window::Cursor cursor) {
 		searchFlags = searchFlags | FindOption::MatchCase;
 	if (wholeWord)
 		searchFlags = searchFlags | FindOption::WholeWord;
+	if (regex)
+		searchFlags = searchFlags | FindOption::RegExp;
 	[self setGeneralProperty: SCI_SETSEARCHFLAGS value: (long)searchFlags];
 	[self setGeneralProperty: SCI_SETTARGETSTART value: startPosition];
 	[self setGeneralProperty: SCI_SETTARGETEND value: endPosition];
@@ -2173,6 +2212,7 @@ static NSCursor *cursorFromEnum(Window::Cursor cursor) {
 	long sourceLength = strlen(textToSearch); // Length in bytes.
 	const char *replacement = newText.UTF8String;
 	long targetLength = strlen(replacement);  // Length in bytes.
+	unsigned int replaceMsg = regex ? SCI_REPLACETARGETRE : SCI_REPLACETARGET;
 	sptr_t result;
 
 	int replaceCount = 0;
@@ -2187,7 +2227,7 @@ static NSCursor *cursorFromEnum(Window::Cursor cursor) {
 
 			replaceCount++;
 			[ScintillaView directCall: self
-					  message: SCI_REPLACETARGET
+					  message: replaceMsg
 					   wParam: targetLength
 					   lParam: (sptr_t) replacement];
 
@@ -2206,7 +2246,7 @@ static NSCursor *cursorFromEnum(Window::Cursor cursor) {
 
 		if (replaceCount > 0) {
 			[ScintillaView directCall: self
-					  message: SCI_REPLACETARGET
+					  message: replaceMsg
 					   wParam: targetLength
 					   lParam: (sptr_t) replacement];
 

@@ -2,7 +2,12 @@
 #import "MainWindowController.h"
 #import "PreferencesController.h"
 #import "PluginHost.h"
+#import "SessionStore.h"
 #import "Scintilla.h"
+
+@interface AppDelegate () <NSMenuDelegate>
+@property (nonatomic, strong) NSMenu *recentMenu;
+@end
 
 @implementation AppDelegate
 
@@ -13,7 +18,13 @@
 
 	self.mainWindowController = [[MainWindowController alloc] init];
 	[self.mainWindowController showWindow:nil];
+	[self.mainWindowController restoreSessionIfNeeded];
 	[NSApp activateIgnoringOtherApps:YES];
+}
+
+- (void)applicationWillTerminate:(NSNotification *)notification
+{
+	[self.mainWindowController persistSession];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
@@ -51,6 +62,13 @@
 	NSMenu *fileMenu = [[NSMenu alloc] initWithTitle:@"File"];
 	[fileMenu addItemWithTitle:@"New" action:@selector(newDocument:) keyEquivalent:@"n"];
 	[fileMenu addItemWithTitle:@"Open…" action:@selector(openDocument:) keyEquivalent:@"o"];
+
+	NSMenuItem *recentItem = [[NSMenuItem alloc] initWithTitle:@"Open Recent" action:nil keyEquivalent:@""];
+	self.recentMenu = [[NSMenu alloc] initWithTitle:@"Open Recent"];
+	self.recentMenu.delegate = self;
+	[recentItem setSubmenu:self.recentMenu];
+	[fileMenu addItem:recentItem];
+
 	[fileMenu addItemWithTitle:@"Save" action:@selector(saveDocument:) keyEquivalent:@"s"];
 	[fileMenu addItemWithTitle:@"Save As…" action:@selector(saveDocumentAs:) keyEquivalent:@"S"];
 	[fileMenu addItemWithTitle:@"Save All" action:@selector(saveAllDocuments:) keyEquivalent:@""];
@@ -164,6 +182,50 @@
 	[helpItem setSubmenu:helpMenu];
 
 	[NSApp setMainMenu:menubar];
+}
+
+- (void)menuNeedsUpdate:(NSMenu *)menu
+{
+	if (menu != self.recentMenu) return;
+	[menu removeAllItems];
+	NSArray<NSString *> *recent = [SessionStore recentFiles];
+	if (recent.count == 0) {
+		NSMenuItem *empty = [menu addItemWithTitle:@"No Recent Documents" action:nil keyEquivalent:@""];
+		empty.enabled = NO;
+	} else {
+		for (NSString *path in recent) {
+			NSMenuItem *mi = [menu addItemWithTitle:path.lastPathComponent
+			                                 action:@selector(openRecentFile:)
+			                          keyEquivalent:@""];
+			mi.target = self;
+			mi.representedObject = path;
+			mi.toolTip = path;
+		}
+	}
+	[menu addItem:[NSMenuItem separatorItem]];
+	NSMenuItem *clear = [menu addItemWithTitle:@"Clear Menu" action:@selector(clearRecentFiles:) keyEquivalent:@""];
+	clear.target = self;
+	clear.enabled = recent.count > 0;
+}
+
+- (void)openRecentFile:(id)sender
+{
+	NSMenuItem *item = (NSMenuItem *)sender;
+	NSString *path = item.representedObject;
+	if (!path) return;
+	if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+		NSAlert *alert = [[NSAlert alloc] init];
+		alert.messageText = @"File not found";
+		alert.informativeText = path;
+		[alert runModal];
+		return;
+	}
+	[self.mainWindowController openPath:path];
+}
+
+- (void)clearRecentFiles:(id)sender
+{
+	[SessionStore clearRecentFiles];
 }
 
 - (void)showAbout:(id)sender

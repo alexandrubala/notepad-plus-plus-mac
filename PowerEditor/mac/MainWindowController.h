@@ -22,10 +22,14 @@
 - (void)openPath:(NSString *)path;
 - (void)newDocument:(id)sender;
 - (void)openDocument:(id)sender;
-- (void)saveDocument:(id)sender;
-- (void)saveDocumentAs:(id)sender;
+- (BOOL)saveDocument:(id)sender;
+- (BOOL)saveDocumentAs:(id)sender;
 - (void)saveAllDocuments:(id)sender;
 - (void)closeDocument:(id)sender;
 - (void)closeAllDocuments:(id)sender;
 - (void)printDocument:(id)sender;
+- (void)showFindStatus:(NSString *)text;
+- (void)restoreSessionIfNeeded;
+- (void)persistSession;
+- (NSArray<NSString *> *)openFilePaths;
 @end

@@ -26,11 +26,7 @@
 
 - (void)configureDefaults
 {
-	PreferencesController *prefs = [PreferencesController sharedController];
-
 	[_editor setGeneralProperty:SCI_SETCODEPAGE parameter:0 value:SC_CP_UTF8];
-	[_editor setGeneralProperty:SCI_SETTABWIDTH parameter:0 value:prefs.tabWidth];
-	[_editor setGeneralProperty:SCI_SETUSETABS parameter:0 value:prefs.useTabs ? 1 : 0];
 	[_editor setGeneralProperty:SCI_SETMULTIPLESELECTION parameter:0 value:1];
 	[_editor setGeneralProperty:SCI_SETADDITIONALSELECTIONTYPING parameter:0 value:1];
 	[_editor setGeneralProperty:SCI_SETVIRTUALSPACEOPTIONS parameter:0 value:SCVS_RECTANGULARSELECTION];
@@ -60,11 +56,17 @@
 
 	[self applyTheme];
 	[self setLanguage:_languageName];
+	[self applyEditorPreferences];
+}
 
-	if (prefs.wordWrap) {
-		self.wordWrap = YES;
-		[_editor setGeneralProperty:SCI_SETWRAPMODE parameter:0 value:SC_WRAP_WORD];
-	}
+- (void)applyEditorPreferences
+{
+	PreferencesController *prefs = [PreferencesController sharedController];
+	[_editor setGeneralProperty:SCI_SETTABWIDTH parameter:0 value:prefs.tabWidth];
+	[_editor setGeneralProperty:SCI_SETUSETABS parameter:0 value:prefs.useTabs ? 1 : 0];
+	self.wordWrap = prefs.wordWrap;
+	[_editor setGeneralProperty:SCI_SETWRAPMODE parameter:0 value:prefs.wordWrap ? SC_WRAP_WORD : SC_WRAP_NONE];
+	[self applyTheme];
 }
 
 - (BOOL)isDarkAppearance
@@ -256,24 +258,61 @@
 	[self setOvertype:![self isOvertype]];
 }
 
++ (BOOL)encodingFromName:(NSString *)name encoding:(NSStringEncoding *)outEncoding
+{
+	if (!name || !outEncoding) return NO;
+	if ([name isEqualToString:@"UTF-8"]) {
+		*outEncoding = NSUTF8StringEncoding;
+	} else if ([name isEqualToString:@"UTF-16 LE"]) {
+		*outEncoding = NSUTF16LittleEndianStringEncoding;
+	} else if ([name isEqualToString:@"UTF-16 BE"]) {
+		*outEncoding = NSUTF16BigEndianStringEncoding;
+	} else if ([name isEqualToString:@"ISO-8859-1"]) {
+		*outEncoding = NSISOLatin1StringEncoding;
+	} else if ([name isEqualToString:@"Windows-1252"]) {
+		*outEncoding = NSWindowsCP1252StringEncoding;
+	} else if ([name isEqualToString:@"ASCII"]) {
+		*outEncoding = NSASCIIStringEncoding;
+	} else {
+		return NO;
+	}
+	return YES;
+}
+
 - (void)setEncodingByName:(NSString *)name
 {
-	if ([name isEqualToString:@"UTF-8"]) {
-		self.textEncoding = NSUTF8StringEncoding;
-	} else if ([name isEqualToString:@"UTF-16 LE"]) {
-		self.textEncoding = NSUTF16LittleEndianStringEncoding;
-	} else if ([name isEqualToString:@"UTF-16 BE"]) {
-		self.textEncoding = NSUTF16BigEndianStringEncoding;
-	} else if ([name isEqualToString:@"ISO-8859-1"]) {
-		self.textEncoding = NSISOLatin1StringEncoding;
-	} else if ([name isEqualToString:@"Windows-1252"]) {
-		self.textEncoding = NSWindowsCP1252StringEncoding;
-	} else if ([name isEqualToString:@"ASCII"]) {
-		self.textEncoding = NSASCIIStringEncoding;
-	} else {
-		return;
-	}
+	NSStringEncoding enc = NSUTF8StringEncoding;
+	if (![EditorDocument encodingFromName:name encoding:&enc]) return;
+	self.textEncoding = enc;
 	self.dirty = YES;
+}
+
+- (BOOL)reloadFromDiskWithEncoding:(NSStringEncoding)encoding error:(NSError **)error
+{
+	if (!self.filePath) {
+		if (error) {
+			*error = [NSError errorWithDomain:NSPOSIXErrorDomain code:EINVAL userInfo:@{
+				NSLocalizedDescriptionKey: @"Document has no file path"
+			}];
+		}
+		return NO;
+	}
+	NSData *data = [NSData dataWithContentsOfFile:self.filePath options:0 error:error];
+	if (!data) return NO;
+	NSString *contents = [[NSString alloc] initWithData:data encoding:encoding];
+	if (!contents) {
+		if (error) {
+			*error = [NSError errorWithDomain:NSPOSIXErrorDomain code:EINVAL userInfo:@{
+				NSLocalizedDescriptionKey: @"Unable to decode file with the selected encoding"
+			}];
+		}
+		return NO;
+	}
+	[_editor setString:contents];
+	self.textEncoding = encoding;
+	self.dirty = NO;
+	[_editor setGeneralProperty:SCI_COLOURISE parameter:0 value:-1];
+	return YES;
 }
 
 - (void)convertToEOLMode:(int)eolMode

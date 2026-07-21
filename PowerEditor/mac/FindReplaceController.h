@@ -8,6 +8,8 @@
 @property (nonatomic, strong) NSButton *caseCheckbox;
 @property (nonatomic, strong) NSButton *wordCheckbox;
 @property (nonatomic, strong) NSButton *wrapCheckbox;
+@property (nonatomic, strong) NSButton *regexCheckbox;
+@property (nonatomic, strong) NSTextField *statusLabel;
 - (void)showFind;
 - (void)showReplace;
 - (void)findNext;

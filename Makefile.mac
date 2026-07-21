@@ -49,7 +49,8 @@ APP_SRC := $(ROOT)/PowerEditor/mac/main.mm \
 	$(ROOT)/PowerEditor/mac/DocumentMapController.mm \
 	$(ROOT)/PowerEditor/mac/MacroRecorder.mm \
 	$(ROOT)/PowerEditor/mac/UDLManager.mm \
-	$(ROOT)/PowerEditor/mac/PluginHost.mm
+	$(ROOT)/PowerEditor/mac/PluginHost.mm \
+	$(ROOT)/PowerEditor/mac/SessionStore.mm
 
 SCI_OBJS := $(patsubst $(ROOT)/scintilla/src/%.cxx,$(OBJ)/scintilla/%.o,$(SCI_SRC)) \
 	$(OBJ)/scintilla/PlatCocoa.o \

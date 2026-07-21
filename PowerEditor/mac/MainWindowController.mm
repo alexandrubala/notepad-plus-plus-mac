@@ -4,6 +4,7 @@
 #import "DocumentMapController.h"
 #import "MacroRecorder.h"
 #import "PreferencesController.h"
+#import "SessionStore.h"
 #import "UDLManager.h"
 #import "ScintillaView.h"
 #import "Scintilla.h"
@@ -71,6 +72,10 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 		                                         selector:@selector(appearanceChanged:)
 		                                             name:NSApplicationDidChangeScreenParametersNotification
 		                                           object:nil];
+		[[NSNotificationCenter defaultCenter] addObserver:self
+		                                         selector:@selector(preferencesDidChange:)
+		                                             name:NppMacPreferencesDidChangeNotification
+		                                           object:nil];
 		[NSApp addObserver:self forKeyPath:@"effectiveAppearance" options:0 context:NULL];
 		[[UDLManager sharedManager] ensureUserDataDirectory];
 		[NSTimer scheduledTimerWithTimeInterval:0.25 target:self selector:@selector(updateStatus:) userInfo:nil repeats:YES];
@@ -80,6 +85,7 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 
 - (void)dealloc
 {
+	[[NSNotificationCenter defaultCenter] removeObserver:self];
 	@try { [NSApp removeObserver:self forKeyPath:@"effectiveAppearance"]; } @catch (__unused NSException *e) {}
 }
 
@@ -97,6 +103,19 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 	for (EditorDocument *doc in self.documents) {
 		[doc applyTheme];
 	}
+}
+
+- (void)preferencesDidChange:(NSNotification *)n
+{
+	for (EditorDocument *doc in self.documents) {
+		[doc applyEditorPreferences];
+	}
+}
+
+- (void)showFindStatus:(NSString *)text
+{
+	if (text.length == 0) return;
+	self.statusPosBtn.title = text;
 }
 
 #pragma mark - Status bar helpers
@@ -354,15 +373,15 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 		return;
 	}
 	[self addDocument:doc];
+	[SessionStore addRecentFile:path];
 }
 
-- (void)saveDocument:(id)sender
+- (BOOL)saveDocument:(id)sender
 {
 	EditorDocument *doc = [self currentDocument];
-	if (!doc) return;
+	if (!doc) return NO;
 	if (!doc.filePath) {
-		[self saveDocumentAs:sender];
-		return;
+		return [self saveDocumentAs:sender];
 	}
 	NSError *error = nil;
 	if (![doc saveToPath:doc.filePath error:&error]) {
@@ -370,29 +389,34 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 		alert.messageText = @"Could not save file";
 		alert.informativeText = error.localizedDescription;
 		[alert runModal];
-		return;
+		return NO;
 	}
+	[SessionStore addRecentFile:doc.filePath];
 	[self updateTabLabels];
+	return YES;
 }
 
-- (void)saveDocumentAs:(id)sender
+- (BOOL)saveDocumentAs:(id)sender
 {
 	EditorDocument *doc = [self currentDocument];
-	if (!doc) return;
+	if (!doc) return NO;
 	NSSavePanel *panel = [NSSavePanel savePanel];
 	panel.nameFieldStringValue = doc.displayName ?: @"Untitled.txt";
-	if ([panel runModal] == NSModalResponseOK) {
-		NSError *error = nil;
-		if (![doc saveToPath:panel.URL.path error:&error]) {
-			NSAlert *alert = [[NSAlert alloc] init];
-			alert.messageText = @"Could not save file";
-			alert.informativeText = error.localizedDescription;
-			[alert runModal];
-			return;
-		}
-		[self updateTabLabels];
-		[self updateWindowTitle];
+	if ([panel runModal] != NSModalResponseOK) {
+		return NO;
 	}
+	NSError *error = nil;
+	if (![doc saveToPath:panel.URL.path error:&error]) {
+		NSAlert *alert = [[NSAlert alloc] init];
+		alert.messageText = @"Could not save file";
+		alert.informativeText = error.localizedDescription;
+		[alert runModal];
+		return NO;
+	}
+	[SessionStore addRecentFile:doc.filePath];
+	[self updateTabLabels];
+	[self updateWindowTitle];
+	return YES;
 }
 
 - (void)saveAllDocuments:(id)sender
@@ -402,8 +426,7 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 		if (!doc.dirty) continue;
 		[self.tabView selectTabViewItemAtIndex:i];
 		if (!doc.filePath) {
-			[self saveDocumentAs:nil];
-			if (doc.dirty) return;
+			if (![self saveDocumentAs:nil]) return;
 		} else {
 			NSError *error = nil;
 			if (![doc saveToPath:doc.filePath error:&error]) {
@@ -413,6 +436,7 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 				[alert runModal];
 				return;
 			}
+			[SessionStore addRecentFile:doc.filePath];
 		}
 	}
 	[self updateTabLabels];
@@ -430,7 +454,7 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 	NSModalResponse r = [alert runModal];
 	if (r == NSAlertFirstButtonReturn) {
 		[self saveDocument:nil];
-		return !doc.dirty || doc.filePath != nil;
+		return !doc.dirty;
 	}
 	if (r == NSAlertSecondButtonReturn) return YES;
 	return NO;
@@ -562,7 +586,31 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 	NSString *name = item.representedObject ?: item.title;
 	EditorDocument *doc = [self currentDocument];
 	if (!doc || !name) return;
-	[doc setEncodingByName:name];
+
+	NSStringEncoding enc = NSUTF8StringEncoding;
+	if (![EditorDocument encodingFromName:name encoding:&enc]) return;
+
+	if (doc.filePath) {
+		if (doc.dirty) {
+			NSAlert *alert = [[NSAlert alloc] init];
+			alert.messageText = @"Reload file with new encoding?";
+			alert.informativeText = @"Unsaved changes will be lost if you reload from disk.";
+			[alert addButtonWithTitle:@"Reload"];
+			[alert addButtonWithTitle:@"Cancel"];
+			if ([alert runModal] != NSAlertFirstButtonReturn) return;
+		}
+		NSError *error = nil;
+		if (![doc reloadFromDiskWithEncoding:enc error:&error]) {
+			NSAlert *alert = [[NSAlert alloc] init];
+			alert.messageText = @"Could not reload file";
+			alert.informativeText = error.localizedDescription ?: @"Unknown error";
+			[alert runModal];
+			return;
+		}
+	} else {
+		[doc setEncodingByName:name];
+		self.statusPosBtn.title = [NSString stringWithFormat:@"Save encoding: %@", name];
+	}
 	[self updateTabLabels];
 	[self updateStatus:nil];
 }
@@ -683,7 +731,49 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 		[self.tabView selectTabViewItemAtIndex:idx];
 		if (![self confirmCloseDocument:doc]) return NO;
 	}
+	[self persistSession];
 	return YES;
+}
+
+- (NSArray<NSString *> *)openFilePaths
+{
+	NSMutableArray *paths = [NSMutableArray array];
+	for (EditorDocument *doc in self.documents) {
+		if (doc.filePath.length) [paths addObject:doc.filePath];
+	}
+	return paths;
+}
+
+- (void)persistSession
+{
+	[SessionStore saveSessionPaths:[self openFilePaths]];
+}
+
+- (void)restoreSessionIfNeeded
+{
+	NSArray<NSString *> *paths = [SessionStore sessionPaths];
+	if (paths.count == 0) return;
+
+	BOOL hadOnlyBlank = (self.documents.count == 1
+	                     && self.documents[0].filePath == nil
+	                     && !self.documents[0].dirty
+	                     && ([self.documents[0].editor string].length == 0));
+
+	NSUInteger opened = 0;
+	for (NSString *path in paths) {
+		if (![[NSFileManager defaultManager] fileExistsAtPath:path]) continue;
+		[self openPath:path];
+		opened++;
+	}
+
+	if (opened > 0 && hadOnlyBlank && self.documents.count > 1) {
+		EditorDocument *blank = self.documents[0];
+		if (blank.filePath == nil && !blank.dirty) {
+			[self.tabView removeTabViewItem:[self.tabView tabViewItemAtIndex:0]];
+			[self.documents removeObjectAtIndex:0];
+			[self updateWindowTitle];
+		}
+	}
 }
 
 - (ScintillaView *)activeEditor

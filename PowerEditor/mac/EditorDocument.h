@@ -15,9 +15,12 @@
 - (instancetype)initWithFrame:(NSRect)frame;
 - (void)configureDefaults;
 - (void)applyTheme;
+- (void)applyEditorPreferences;
 - (void)setLanguage:(NSString *)languageName;
 - (BOOL)loadFromPath:(NSString *)path error:(NSError **)error;
 - (BOOL)saveToPath:(NSString *)path error:(NSError **)error;
+- (BOOL)reloadFromDiskWithEncoding:(NSStringEncoding)encoding error:(NSError **)error;
++ (BOOL)encodingFromName:(NSString *)name encoding:(NSStringEncoding *)outEncoding;
 
 - (NSString *)tabTitle;
 - (NSString *)encodingDisplayName;

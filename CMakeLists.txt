@@ -51,6 +51,7 @@ set(APP_SOURCES
   ${MAC_ROOT}/MacroRecorder.mm
   ${MAC_ROOT}/UDLManager.mm
   ${MAC_ROOT}/PluginHost.mm
+  ${MAC_ROOT}/SessionStore.mm
 )
 
 add_executable(Notepad++ MACOSX_BUNDLE ${APP_SOURCES})

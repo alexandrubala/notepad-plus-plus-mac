@@ -159,10 +159,25 @@ extern NSString *const SCIUpdateUINotification;
 			 wrap: (BOOL) wrap
 		    backwards: (BOOL) backwards;
 
+- (BOOL) findAndHighlightText: (NSString *) searchText
+		    matchCase: (BOOL) matchCase
+		    wholeWord: (BOOL) wholeWord
+		     scrollTo: (BOOL) scrollTo
+			 wrap: (BOOL) wrap
+		    backwards: (BOOL) backwards
+			   regex: (BOOL) regex;
+
 - (int) findAndReplaceText: (NSString *) searchText
 		    byText: (NSString *) newText
 		 matchCase: (BOOL) matchCase
 		 wholeWord: (BOOL) wholeWord
 		     doAll: (BOOL) doAll;
+
+- (int) findAndReplaceText: (NSString *) searchText
+		    byText: (NSString *) newText
+		 matchCase: (BOOL) matchCase
+		 wholeWord: (BOOL) wholeWord
+		     doAll: (BOOL) doAll
+		     regex: (BOOL) regex;
 
 @end
