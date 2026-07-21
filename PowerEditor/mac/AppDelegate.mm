@@ -124,8 +124,10 @@
 	NSMenuItem *langItem = [[NSMenuItem alloc] init];
 	[menubar addItem:langItem];
 	NSMenu *langMenu = [[NSMenu alloc] initWithTitle:@"Language"];
-	NSArray *langs = @[@"None", @"C++", @"C", @"Python", @"JavaScript", @"HTML", @"XML", @"JSON",
-	                   @"Markdown", @"Java", @"Swift", @"Rust", @"Go", @"Shell", @"SQL", @"CSS", @"UDL"];
+	NSArray *langs = @[@"None", @"C++", @"C", @"C#", @"Python", @"JavaScript", @"TypeScript",
+	                   @"HTML", @"XML", @"CSS", @"JSON", @"Markdown", @"YAML",
+	                   @"Java", @"Swift", @"Rust", @"Go", @"Ruby", @"PHP",
+	                   @"Shell", @"SQL", @"UDL"];
 	for (NSString *name in langs) {
 		NSMenuItem *mi = [langMenu addItemWithTitle:name action:@selector(setLanguage:) keyEquivalent:@""];
 		mi.representedObject = name;

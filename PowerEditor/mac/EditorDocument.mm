@@ -92,13 +92,17 @@
 {
 	_languageName = languageName ?: @"None";
 	NSString *lexer = [LanguageMapper lexerForDisplayName:_languageName];
+	NSString *sciLexer = [LanguageMapper scintillaLexerName:lexer];
 
-	Scintilla::ILexer5 *pLexer = CreateLexer(lexer.UTF8String);
+	Scintilla::ILexer5 *pLexer = CreateLexer(sciLexer.UTF8String);
 	if (!pLexer) {
 		pLexer = CreateLexer("null");
 	}
 	[_editor setReferenceProperty:SCI_SETILEXER parameter:0 value:pLexer];
 
+	for (int set = 0; set <= 8; set++) {
+		[_editor setReferenceProperty:SCI_SETKEYWORDS parameter:set value:""];
+	}
 	for (int set = 0; set <= 5; set++) {
 		const char *kw = [LanguageMapper keywordsForLexer:lexer set:set];
 		if (kw && kw[0] != '\0') {
@@ -106,7 +110,8 @@
 		}
 	}
 
-	if ([lexer isEqualToString:@"hypertext"] || [lexer isEqualToString:@"xml"]) {
+	if ([lexer isEqualToString:@"hypertext"] || [lexer isEqualToString:@"xml"]
+	    || [lexer isEqualToString:@"phpscript"]) {
 		[_editor message:SCI_SETPROPERTY wParam:(uptr_t)"fold.html" lParam:(sptr_t)"1"];
 	}
 
