@@ -42,6 +42,7 @@ LEX_SRC := $(ROOT)/lexilla/src/Lexilla.cxx \
 APP_SRC := $(ROOT)/PowerEditor/mac/main.mm \
 	$(ROOT)/PowerEditor/mac/AppDelegate.mm \
 	$(ROOT)/PowerEditor/mac/MainWindowController.mm \
+	$(ROOT)/PowerEditor/mac/DocumentTabBar.mm \
 	$(ROOT)/PowerEditor/mac/EditorDocument.mm \
 	$(ROOT)/PowerEditor/mac/LanguageMapper.mm \
 	$(ROOT)/PowerEditor/mac/FindReplaceController.mm \

@@ -6,8 +6,11 @@
 @class DocumentMapController;
 @class MacroRecorder;
 
+@class DocumentTabBar;
+
 @interface MainWindowController : NSWindowController <NSWindowDelegate, NSTabViewDelegate, NSToolbarDelegate>
 @property (nonatomic, strong) NSTabView *tabView;
+@property (nonatomic, strong) DocumentTabBar *documentTabBar;
 @property (nonatomic, strong) NSStackView *statusStack;
 @property (nonatomic, strong) NSView *documentMapContainer;
 @property (nonatomic, strong) FindReplaceController *findController;

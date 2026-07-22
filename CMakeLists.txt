@@ -43,6 +43,7 @@ set(APP_SOURCES
   ${MAC_ROOT}/main.mm
   ${MAC_ROOT}/AppDelegate.mm
   ${MAC_ROOT}/MainWindowController.mm
+  ${MAC_ROOT}/DocumentTabBar.mm
   ${MAC_ROOT}/EditorDocument.mm
   ${MAC_ROOT}/LanguageMapper.mm
   ${MAC_ROOT}/FindReplaceController.mm

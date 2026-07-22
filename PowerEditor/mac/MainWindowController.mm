@@ -1,4 +1,5 @@
 #import "MainWindowController.h"
+#import "DocumentTabBar.h"
 #import "EditorDocument.h"
 #import "FindReplaceController.h"
 #import "DocumentMapController.h"
@@ -29,7 +30,7 @@ static NSString * const kTBMacroStart = @"TBMacroStart";
 static NSString * const kTBMacroStop = @"TBMacroStop";
 static NSString * const kTBMacroPlay = @"TBMacroPlay";
 
-@interface MainWindowController () <ScintillaNotificationProtocol>
+@interface MainWindowController () <ScintillaNotificationProtocol, DocumentTabBarDelegate>
 @property (nonatomic, strong) NSMutableArray<EditorDocument *> *documents;
 @property (nonatomic, strong) NSLayoutConstraint *mapWidthConstraint;
 @property (nonatomic, strong) NSButton *statusLengthBtn;
@@ -169,8 +170,14 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 	self.statusStack.layer.backgroundColor = [NSColor windowBackgroundColor].CGColor;
 	[content addSubview:self.statusStack];
 
+	self.documentTabBar = [[DocumentTabBar alloc] initWithFrame:NSZeroRect];
+	self.documentTabBar.delegate = self;
+	self.documentTabBar.translatesAutoresizingMaskIntoConstraints = NO;
+	[content addSubview:self.documentTabBar];
+
 	self.tabView = [[NSTabView alloc] initWithFrame:NSZeroRect];
-	self.tabView.tabViewType = NSTopTabsBezelBorder;
+	self.tabView.tabViewType = NSNoTabsNoBorder;
+	self.tabView.drawsBackground = NO;
 	self.tabView.delegate = self;
 	self.tabView.translatesAutoresizingMaskIntoConstraints = NO;
 	[content addSubview:self.tabView];
@@ -192,7 +199,11 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 
 	self.mapWidthConstraint = [self.documentMapContainer.widthAnchor constraintEqualToConstant:0];
 	[NSLayoutConstraint activateConstraints:@[
-		[self.tabView.topAnchor constraintEqualToAnchor:content.topAnchor constant:0],
+		[self.documentTabBar.topAnchor constraintEqualToAnchor:content.topAnchor],
+		[self.documentTabBar.leadingAnchor constraintEqualToAnchor:content.leadingAnchor],
+		[self.documentTabBar.trailingAnchor constraintEqualToAnchor:self.documentMapContainer.leadingAnchor],
+		[self.documentTabBar.heightAnchor constraintEqualToConstant:32],
+		[self.tabView.topAnchor constraintEqualToAnchor:self.documentTabBar.bottomAnchor],
 		[self.tabView.leadingAnchor constraintEqualToAnchor:content.leadingAnchor],
 		[self.tabView.trailingAnchor constraintEqualToAnchor:self.documentMapContainer.leadingAnchor],
 		[self.tabView.bottomAnchor constraintEqualToAnchor:self.statusStack.topAnchor],
@@ -326,7 +337,22 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 	doc.editor.delegate = self;
 	[self.tabView addTabViewItem:item];
 	[self.tabView selectTabViewItem:item];
+	[self reloadDocumentTabBar];
 	[self updateWindowTitle];
+}
+
+- (void)reloadDocumentTabBar
+{
+	NSMutableArray<NSString *> *titles = [NSMutableArray arrayWithCapacity:self.documents.count];
+	for (EditorDocument *doc in self.documents) {
+		[titles addObject:[doc tabTitle]];
+	}
+	NSInteger selected = -1;
+	NSTabViewItem *item = self.tabView.selectedTabViewItem;
+	if (item) {
+		selected = [self.tabView indexOfTabViewItem:item];
+	}
+	[self.documentTabBar reloadWithTitles:titles selectedIndex:selected];
 }
 
 - (void)newDocument:(id)sender
@@ -475,14 +501,24 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 {
 	EditorDocument *doc = [self currentDocument];
 	if (!doc) return;
-	if (![self confirmCloseDocument:doc]) return;
 	NSInteger idx = [self.documents indexOfObject:doc];
 	if (idx == NSNotFound) return;
+	[self closeDocumentAtIndex:idx];
+}
+
+- (void)closeDocumentAtIndex:(NSInteger)idx
+{
+	if (idx < 0 || idx >= (NSInteger)self.documents.count) return;
+	EditorDocument *doc = self.documents[idx];
+	[self.tabView selectTabViewItemAtIndex:idx];
+	if (![self confirmCloseDocument:doc]) return;
 	[self.tabView removeTabViewItem:[self.tabView tabViewItemAtIndex:idx]];
 	[self.documents removeObjectAtIndex:idx];
 	if (self.documents.count == 0) {
 		[self newDocument:nil];
+		return;
 	}
+	[self reloadDocumentTabBar];
 	[self updateWindowTitle];
 }
 
@@ -505,11 +541,7 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 
 - (void)updateTabLabels
 {
-	for (NSInteger i = 0; i < (NSInteger)self.documents.count; i++) {
-		EditorDocument *doc = self.documents[i];
-		NSTabViewItem *item = [self.tabView tabViewItemAtIndex:i];
-		item.label = [doc tabTitle];
-	}
+	[self reloadDocumentTabBar];
 	[self updateWindowTitle];
 }
 
@@ -540,11 +572,30 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 
 - (void)tabView:(NSTabView *)tabView didSelectTabViewItem:(NSTabViewItem *)tabViewItem
 {
+	[self reloadDocumentTabBar];
 	[self updateWindowTitle];
 	EditorDocument *doc = [self currentDocument];
 	if (doc && self.documentMapVisible) {
 		[self.documentMap syncFromEditor:doc.editor];
 	}
+}
+
+#pragma mark - DocumentTabBarDelegate
+
+- (void)documentTabBar:(DocumentTabBar *)bar didSelectTabAtIndex:(NSInteger)index
+{
+	if (index < 0 || index >= (NSInteger)self.tabView.numberOfTabViewItems) return;
+	[self.tabView selectTabViewItemAtIndex:index];
+}
+
+- (void)documentTabBarDidRequestNewTab:(DocumentTabBar *)bar
+{
+	[self newDocument:nil];
+}
+
+- (void)documentTabBar:(DocumentTabBar *)bar didRequestCloseTabAtIndex:(NSInteger)index
+{
+	[self closeDocumentAtIndex:index];
 }
 
 - (void)notification:(SCNotification *)notification
@@ -802,6 +853,7 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 		if (blank.filePath == nil && !blank.dirty) {
 			[self.tabView removeTabViewItem:[self.tabView tabViewItemAtIndex:0]];
 			[self.documents removeObjectAtIndex:0];
+			[self reloadDocumentTabBar];
 			[self updateWindowTitle];
 		}
 	}
