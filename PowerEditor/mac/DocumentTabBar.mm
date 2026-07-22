@@ -1,6 +1,6 @@
 #import "DocumentTabBar.h"
 
-static const CGFloat kTabBarHeight = 32.0;
+static const CGFloat kTabBarHeight = 36.0;
 static const CGFloat kTabHeight = 24.0;
 static const CGFloat kCloseSize = 14.0;
 
@@ -182,7 +182,6 @@ static const CGFloat kCloseSize = 14.0;
 @end
 
 @interface DocumentTabBar ()
-@property (nonatomic, strong) NSScrollView *scrollView;
 @property (nonatomic, strong) NSStackView *rowStack;
 @property (nonatomic, strong) NSButton *addButton;
 @property (nonatomic, strong) NSArray<NSString *> *titles;
@@ -198,21 +197,13 @@ static const CGFloat kCloseSize = 14.0;
 		self.wantsLayer = YES;
 		_selectedIndex = -1;
 
-		_scrollView = [[NSScrollView alloc] initWithFrame:NSZeroRect];
-		_scrollView.drawsBackground = NO;
-		_scrollView.hasHorizontalScroller = NO;
-		_scrollView.hasVerticalScroller = NO;
-		_scrollView.borderType = NSNoBorder;
-		_scrollView.translatesAutoresizingMaskIntoConstraints = NO;
-		[self addSubview:_scrollView];
-
 		_rowStack = [NSStackView stackViewWithViews:@[]];
 		_rowStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
 		_rowStack.alignment = NSLayoutAttributeCenterY;
 		_rowStack.spacing = 4;
-		_rowStack.edgeInsets = NSEdgeInsetsMake(4, 8, 4, 8);
-		_rowStack.translatesAutoresizingMaskIntoConstraints = YES;
-		_scrollView.documentView = _rowStack;
+		_rowStack.edgeInsets = NSEdgeInsetsMake(0, 0, 0, 0);
+		_rowStack.translatesAutoresizingMaskIntoConstraints = NO;
+		[self addSubview:_rowStack];
 
 		_addButton = [NSButton buttonWithImage:[NSImage imageWithSystemSymbolName:@"plus"
 		                                                 accessibilityDescription:@"New"]
@@ -232,11 +223,13 @@ static const CGFloat kCloseSize = 14.0;
 		separator.translatesAutoresizingMaskIntoConstraints = NO;
 		[self addSubview:separator];
 
+		NSLayoutConstraint *centerX = [_rowStack.centerXAnchor constraintEqualToAnchor:self.centerXAnchor];
+		centerX.priority = NSLayoutPriorityDefaultHigh;
 		[NSLayoutConstraint activateConstraints:@[
-			[_scrollView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-			[_scrollView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-			[_scrollView.topAnchor constraintEqualToAnchor:self.topAnchor],
-			[_scrollView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+			[_rowStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+			centerX,
+			[_rowStack.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor constant:8],
+			[_rowStack.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-8],
 			[separator.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
 			[separator.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
 			[separator.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
@@ -284,10 +277,6 @@ static const CGFloat kCloseSize = 14.0;
 	}
 
 	[self.rowStack addArrangedSubview:self.addButton];
-
-	[self.rowStack layoutSubtreeIfNeeded];
-	NSSize size = self.rowStack.fittingSize;
-	self.rowStack.frame = NSMakeRect(0, 0, MAX(size.width, 1), kTabBarHeight);
 	[self refreshBackground];
 }
 
