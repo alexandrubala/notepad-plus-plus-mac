@@ -30,7 +30,7 @@ static NSString * const kTBMacroStart = @"TBMacroStart";
 static NSString * const kTBMacroStop = @"TBMacroStop";
 static NSString * const kTBMacroPlay = @"TBMacroPlay";
 
-@interface MainWindowController () <ScintillaNotificationProtocol, DocumentTabBarDelegate>
+@interface MainWindowController () <ScintillaNotificationProtocol, DocumentTabBarDelegate, NSTextFieldDelegate>
 @property (nonatomic, strong) NSMutableArray<EditorDocument *> *documents;
 @property (nonatomic, strong) NSLayoutConstraint *mapWidthConstraint;
 @property (nonatomic, strong) NSButton *statusLengthBtn;
@@ -38,6 +38,10 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 @property (nonatomic, strong) NSButton *statusEOLBtn;
 @property (nonatomic, strong) NSButton *statusEncodingBtn;
 @property (nonatomic, strong) NSButton *statusInsBtn;
+@property (nonatomic, strong) NSTextField *titleNameField;
+@property (nonatomic, strong) NSTextField *titleSuffixField;
+@property (nonatomic, strong) NSTitlebarAccessoryViewController *titleAccessory;
+@property (nonatomic, assign) BOOL updatingTitleField;
 @end
 
 @implementation MainWindowController
@@ -52,6 +56,7 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 	                                                 backing:NSBackingStoreBuffered
 	                                                   defer:NO];
 	window.title = @"Notepad++";
+	window.titleVisibility = NSWindowTitleHidden;
 	window.minSize = NSMakeSize(500, 300);
 	[window center];
 	self = [super initWithWindow:window];
@@ -63,6 +68,7 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 		_documentMap = [[DocumentMapController alloc] init];
 		_documentMapVisible = NO;
 		window.delegate = self;
+		[self buildTitleAccessory];
 		[self buildUI];
 		[self buildToolbar];
 		[self newDocument:nil];
@@ -114,6 +120,56 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 {
 	if (text.length == 0) return;
 	self.statusPosBtn.title = text;
+}
+
+#pragma mark - Title bar rename
+
+- (void)buildTitleAccessory
+{
+	_titleNameField = [[NSTextField alloc] initWithFrame:NSZeroRect];
+	_titleNameField.bordered = NO;
+	_titleNameField.bezeled = NO;
+	_titleNameField.drawsBackground = NO;
+	_titleNameField.editable = YES;
+	_titleNameField.selectable = YES;
+	_titleNameField.focusRingType = NSFocusRingTypeNone;
+	_titleNameField.font = [NSFont systemFontOfSize:13 weight:NSFontWeightSemibold];
+	_titleNameField.textColor = [NSColor labelColor];
+	_titleNameField.placeholderString = @"Untitled";
+	_titleNameField.toolTip = @"Click to rename";
+	_titleNameField.delegate = self;
+	_titleNameField.usesSingleLineMode = YES;
+	_titleNameField.cell.lineBreakMode = NSLineBreakByTruncatingMiddle;
+	_titleNameField.translatesAutoresizingMaskIntoConstraints = NO;
+	[_titleNameField setContentHuggingPriority:250 forOrientation:NSLayoutConstraintOrientationHorizontal];
+	[_titleNameField setContentCompressionResistancePriority:750 forOrientation:NSLayoutConstraintOrientationHorizontal];
+
+	_titleSuffixField = [[NSTextField alloc] initWithFrame:NSZeroRect];
+	_titleSuffixField.bordered = NO;
+	_titleSuffixField.bezeled = NO;
+	_titleSuffixField.drawsBackground = NO;
+	_titleSuffixField.editable = NO;
+	_titleSuffixField.selectable = NO;
+	_titleSuffixField.refusesFirstResponder = YES;
+	_titleSuffixField.stringValue = @"— Notepad++";
+	_titleSuffixField.font = [NSFont systemFontOfSize:13 weight:NSFontWeightRegular];
+	_titleSuffixField.textColor = [NSColor secondaryLabelColor];
+	_titleSuffixField.translatesAutoresizingMaskIntoConstraints = NO;
+	[_titleSuffixField setContentHuggingPriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
+
+	NSStackView *stack = [NSStackView stackViewWithViews:@[_titleNameField, _titleSuffixField]];
+	stack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+	stack.alignment = NSLayoutAttributeCenterY;
+	stack.spacing = 6;
+	stack.edgeInsets = NSEdgeInsetsMake(0, 2, 0, 8);
+	stack.frame = NSMakeRect(0, 0, 260, 28);
+	[_titleNameField.widthAnchor constraintGreaterThanOrEqualToConstant:48].active = YES;
+	[_titleNameField.widthAnchor constraintLessThanOrEqualToConstant:160].active = YES;
+
+	_titleAccessory = [[NSTitlebarAccessoryViewController alloc] init];
+	_titleAccessory.view = stack;
+	_titleAccessory.layoutAttribute = NSLayoutAttributeLeft;
+	[self.window addTitlebarAccessoryViewController:_titleAccessory];
 }
 
 #pragma mark - Status bar helpers
@@ -548,12 +604,220 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 - (void)updateWindowTitle
 {
 	EditorDocument *doc = [self currentDocument];
+	self.updatingTitleField = YES;
 	if (!doc) {
 		self.window.title = @"Notepad++";
+		if (self.titleNameField.currentEditor == nil) {
+			self.titleNameField.stringValue = @"";
+		}
+		self.titleNameField.enabled = NO;
+		self.titleSuffixField.stringValue = @"Notepad++";
+		self.updatingTitleField = NO;
 		return;
 	}
-	NSString *name = doc.filePath ?: doc.displayName;
+	self.titleNameField.enabled = YES;
+	NSString *name = doc.displayName ?: @"Untitled";
+	if (self.titleNameField.currentEditor == nil) {
+		self.titleNameField.stringValue = name;
+	}
+	self.titleSuffixField.stringValue = @"— Notepad++";
 	self.window.title = [NSString stringWithFormat:@"%@%@ — Notepad++", name, doc.dirty ? @" *" : @""];
+	self.updatingTitleField = NO;
+}
+
+- (NSString *)sanitizedDocumentName:(NSString *)raw
+{
+	NSString *name = [raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (name.length == 0) return nil;
+	name = [name stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
+	name = [name stringByReplacingOccurrencesOfString:@":" withString:@"-"];
+	if ([name hasPrefix:@"*"]) {
+		name = [[name substringFromIndex:1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+	}
+	return name.length > 0 ? name : nil;
+}
+
+- (BOOL)applyRename:(NSString *)rawName toDocument:(EditorDocument *)doc
+{
+	NSString *name = [self sanitizedDocumentName:rawName];
+	if (!name || !doc) return NO;
+	if ([name isEqualToString:doc.displayName]) return YES;
+
+	if (doc.filePath.length > 0) {
+		NSString *dir = doc.filePath.stringByDeletingLastPathComponent;
+		NSString *dest = [dir stringByAppendingPathComponent:name];
+		if ([dest isEqualToString:doc.filePath]) {
+			doc.displayName = name;
+			[self updateTabLabels];
+			return YES;
+		}
+		if ([[NSFileManager defaultManager] fileExistsAtPath:dest]) {
+			NSAlert *alert = [[NSAlert alloc] init];
+			alert.messageText = @"Name already in use";
+			alert.informativeText = [NSString stringWithFormat:@"A file named \"%@\" already exists in this folder.", name];
+			[alert runModal];
+			return NO;
+		}
+		NSError *error = nil;
+		if (![[NSFileManager defaultManager] moveItemAtPath:doc.filePath toPath:dest error:&error]) {
+			NSAlert *alert = [[NSAlert alloc] init];
+			alert.messageText = @"Could not rename file";
+			alert.informativeText = error.localizedDescription ?: @"";
+			[alert runModal];
+			return NO;
+		}
+		doc.filePath = dest;
+		doc.displayName = name;
+		[SessionStore addRecentFile:dest];
+	} else {
+		doc.displayName = name;
+	}
+	[self updateTabLabels];
+	return YES;
+}
+
+- (void)promptRenameDocumentAtIndex:(NSInteger)idx
+{
+	if (idx < 0 || idx >= (NSInteger)self.documents.count) return;
+	EditorDocument *doc = self.documents[idx];
+	[self.tabView selectTabViewItemAtIndex:idx];
+
+	NSAlert *alert = [[NSAlert alloc] init];
+	alert.messageText = @"Rename";
+	alert.informativeText = doc.filePath.length > 0
+	    ? @"Enter a new file name."
+	    : @"Enter a name for this document.";
+	NSTextField *input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 260, 24)];
+	input.stringValue = doc.displayName ?: @"Untitled";
+	alert.accessoryView = input;
+	[alert addButtonWithTitle:@"Rename"];
+	[alert addButtonWithTitle:@"Cancel"];
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[input selectText:nil];
+	});
+	if ([alert runModal] != NSAlertFirstButtonReturn) return;
+	[self applyRename:input.stringValue toDocument:doc];
+}
+
+- (void)duplicateDocumentAtIndex:(NSInteger)idx
+{
+	if (idx < 0 || idx >= (NSInteger)self.documents.count) return;
+	EditorDocument *src = self.documents[idx];
+	EditorDocument *copy = [[EditorDocument alloc] initWithFrame:NSMakeRect(0, 0, 800, 600)];
+	NSString *contents = [src.editor string] ?: @"";
+	[copy.editor setString:contents];
+	copy.displayName = [self uniqueDuplicateNameFor:src.displayName];
+	copy.textEncoding = src.textEncoding;
+	copy.wordWrap = src.wordWrap;
+	copy.lineNumbersVisible = src.lineNumbersVisible;
+	copy.languageName = src.languageName;
+	[copy setLanguage:src.languageName];
+	copy.dirty = YES;
+	[self addDocument:copy];
+}
+
+- (NSString *)uniqueDuplicateNameFor:(NSString *)baseName
+{
+	NSString *base = baseName.length ? baseName : @"Untitled";
+	NSString *stem = base.stringByDeletingPathExtension;
+	NSString *ext = base.pathExtension;
+	NSString *candidate = ext.length
+	    ? [NSString stringWithFormat:@"%@ copy.%@", stem, ext]
+	    : [NSString stringWithFormat:@"%@ copy", stem];
+	NSInteger n = 2;
+	while ([self documentDisplayNameInUse:candidate]) {
+		candidate = ext.length
+		    ? [NSString stringWithFormat:@"%@ copy %ld.%@", stem, (long)n, ext]
+		    : [NSString stringWithFormat:@"%@ copy %ld", stem, (long)n];
+		n++;
+	}
+	return candidate;
+}
+
+- (BOOL)documentDisplayNameInUse:(NSString *)name
+{
+	for (EditorDocument *doc in self.documents) {
+		if ([doc.displayName isEqualToString:name]) return YES;
+	}
+	return NO;
+}
+
+- (void)deleteDocumentAtIndex:(NSInteger)idx
+{
+	if (idx < 0 || idx >= (NSInteger)self.documents.count) return;
+	EditorDocument *doc = self.documents[idx];
+	[self.tabView selectTabViewItemAtIndex:idx];
+
+	NSAlert *alert = [[NSAlert alloc] init];
+	if (doc.filePath.length > 0) {
+		alert.messageText = [NSString stringWithFormat:@"Delete \"%@\"?", doc.displayName];
+		alert.informativeText = @"This will permanently delete the file from disk and close the tab.";
+		[alert addButtonWithTitle:@"Delete"];
+		[alert addButtonWithTitle:@"Cancel"];
+		if ([alert runModal] != NSAlertFirstButtonReturn) return;
+
+		NSError *error = nil;
+		if (![[NSFileManager defaultManager] removeItemAtPath:doc.filePath error:&error]) {
+			NSAlert *errAlert = [[NSAlert alloc] init];
+			errAlert.messageText = @"Could not delete file";
+			errAlert.informativeText = error.localizedDescription ?: @"";
+			[errAlert runModal];
+			return;
+		}
+		doc.dirty = NO;
+		doc.filePath = nil;
+	} else {
+		alert.messageText = [NSString stringWithFormat:@"Delete \"%@\"?", doc.displayName ?: @"Untitled"];
+		alert.informativeText = @"This will close the tab and discard its contents.";
+		[alert addButtonWithTitle:@"Delete"];
+		[alert addButtonWithTitle:@"Cancel"];
+		if ([alert runModal] != NSAlertFirstButtonReturn) return;
+		doc.dirty = NO;
+	}
+
+	[self.tabView removeTabViewItem:[self.tabView tabViewItemAtIndex:idx]];
+	[self.documents removeObjectAtIndex:idx];
+	if (self.documents.count == 0) {
+		[self newDocument:nil];
+		return;
+	}
+	[self reloadDocumentTabBar];
+	[self updateWindowTitle];
+}
+
+- (void)controlTextDidBeginEditing:(NSNotification *)notification
+{
+	if (notification.object != self.titleNameField) return;
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[self.titleNameField.currentEditor selectAll:nil];
+	});
+}
+
+- (void)controlTextDidEndEditing:(NSNotification *)notification
+{
+	if (notification.object != self.titleNameField) return;
+	if (self.updatingTitleField) return;
+	EditorDocument *doc = [self currentDocument];
+	if (!doc) return;
+	NSString *typed = self.titleNameField.stringValue;
+	if (![self applyRename:typed toDocument:doc]) {
+		[self updateWindowTitle];
+	}
+}
+
+- (BOOL)control:(NSControl *)control textView:(NSTextView *)textView doCommandBySelector:(SEL)commandSelector
+{
+	if (control != self.titleNameField) return NO;
+	if (commandSelector == @selector(insertNewline:)) {
+		[self.window makeFirstResponder:nil];
+		return YES;
+	}
+	if (commandSelector == @selector(cancelOperation:)) {
+		[self updateWindowTitle];
+		[self.window makeFirstResponder:nil];
+		return YES;
+	}
+	return NO;
 }
 
 - (void)updateStatus:(NSTimer *)timer
@@ -596,6 +860,21 @@ static NSString * const kTBMacroPlay = @"TBMacroPlay";
 - (void)documentTabBar:(DocumentTabBar *)bar didRequestCloseTabAtIndex:(NSInteger)index
 {
 	[self closeDocumentAtIndex:index];
+}
+
+- (void)documentTabBar:(DocumentTabBar *)bar didRequestRenameTabAtIndex:(NSInteger)index
+{
+	[self promptRenameDocumentAtIndex:index];
+}
+
+- (void)documentTabBar:(DocumentTabBar *)bar didRequestDuplicateTabAtIndex:(NSInteger)index
+{
+	[self duplicateDocumentAtIndex:index];
+}
+
+- (void)documentTabBar:(DocumentTabBar *)bar didRequestDeleteTabAtIndex:(NSInteger)index
+{
+	[self deleteDocumentAtIndex:index];
 }
 
 - (void)notification:(SCNotification *)notification

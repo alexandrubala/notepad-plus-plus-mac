@@ -7,6 +7,9 @@
 - (void)documentTabBar:(DocumentTabBar *)bar didSelectTabAtIndex:(NSInteger)index;
 - (void)documentTabBarDidRequestNewTab:(DocumentTabBar *)bar;
 - (void)documentTabBar:(DocumentTabBar *)bar didRequestCloseTabAtIndex:(NSInteger)index;
+- (void)documentTabBar:(DocumentTabBar *)bar didRequestRenameTabAtIndex:(NSInteger)index;
+- (void)documentTabBar:(DocumentTabBar *)bar didRequestDuplicateTabAtIndex:(NSInteger)index;
+- (void)documentTabBar:(DocumentTabBar *)bar didRequestDeleteTabAtIndex:(NSInteger)index;
 @end
 
 @interface DocumentTabBar : NSView

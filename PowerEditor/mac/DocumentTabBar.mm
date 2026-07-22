@@ -12,6 +12,7 @@ static const CGFloat kCloseSize = 14.0;
 @property (nonatomic, weak) id target;
 @property (nonatomic, assign) SEL selectAction;
 @property (nonatomic, assign) SEL closeAction;
+@property (nonatomic, assign) SEL contextMenuAction;
 @end
 
 @interface DocumentTabButton ()
@@ -32,8 +33,10 @@ static const CGFloat kCloseSize = 14.0;
 
 		_titleField = [[NSTextField alloc] initWithFrame:NSZeroRect];
 		_titleField.editable = NO;
+		_titleField.selectable = NO;
 		_titleField.bordered = NO;
 		_titleField.drawsBackground = NO;
+		_titleField.refusesFirstResponder = YES;
 		_titleField.font = [NSFont systemFontOfSize:12 weight:NSFontWeightMedium];
 		_titleField.alignment = NSTextAlignmentCenter;
 		_titleField.lineBreakMode = NSLineBreakByTruncatingTail;
@@ -123,6 +126,16 @@ static const CGFloat kCloseSize = 14.0;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
 	[self.target performSelector:self.selectAction withObject:self];
+#pragma clang diagnostic pop
+}
+
+- (void)rightMouseDown:(NSEvent *)event
+{
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+	if (self.target && self.contextMenuAction) {
+		[self.target performSelector:self.contextMenuAction withObject:self];
+	}
 #pragma clang diagnostic pop
 }
 
@@ -270,6 +283,7 @@ static const CGFloat kCloseSize = 14.0;
 		tab.target = self;
 		tab.selectAction = @selector(tabSelected:);
 		tab.closeAction = @selector(tabClosed:);
+		tab.contextMenuAction = @selector(tabContextMenu:);
 		tab.translatesAutoresizingMaskIntoConstraints = NO;
 		[tab.heightAnchor constraintEqualToConstant:kTabHeight].active = YES;
 		[tab.widthAnchor constraintEqualToConstant:tab.intrinsicContentSize.width].active = YES;
@@ -299,6 +313,58 @@ static const CGFloat kCloseSize = 14.0;
 - (void)tabClosed:(DocumentTabButton *)tab
 {
 	[self.delegate documentTabBar:self didRequestCloseTabAtIndex:tab.tabIndex];
+}
+
+- (void)tabContextMenu:(DocumentTabButton *)tab
+{
+	NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Tab"];
+	NSMenuItem *rename = [menu addItemWithTitle:@"Rename"
+	                                     action:@selector(contextRename:)
+	                              keyEquivalent:@""];
+	rename.target = self;
+	rename.tag = tab.tabIndex;
+
+	NSMenuItem *duplicate = [menu addItemWithTitle:@"Duplicate"
+	                                        action:@selector(contextDuplicate:)
+	                                 keyEquivalent:@""];
+	duplicate.target = self;
+	duplicate.tag = tab.tabIndex;
+
+	[menu addItem:[NSMenuItem separatorItem]];
+
+	NSMenuItem *deleteItem = [menu addItemWithTitle:@"Delete"
+	                                         action:@selector(contextDelete:)
+	                                  keyEquivalent:@""];
+	deleteItem.target = self;
+	deleteItem.tag = tab.tabIndex;
+
+	NSMenuItem *close = [menu addItemWithTitle:@"Close"
+	                                    action:@selector(contextClose:)
+	                             keyEquivalent:@""];
+	close.target = self;
+	close.tag = tab.tabIndex;
+
+	[NSMenu popUpContextMenu:menu withEvent:NSApp.currentEvent forView:tab];
+}
+
+- (void)contextRename:(NSMenuItem *)sender
+{
+	[self.delegate documentTabBar:self didRequestRenameTabAtIndex:sender.tag];
+}
+
+- (void)contextDuplicate:(NSMenuItem *)sender
+{
+	[self.delegate documentTabBar:self didRequestDuplicateTabAtIndex:sender.tag];
+}
+
+- (void)contextDelete:(NSMenuItem *)sender
+{
+	[self.delegate documentTabBar:self didRequestDeleteTabAtIndex:sender.tag];
+}
+
+- (void)contextClose:(NSMenuItem *)sender
+{
+	[self.delegate documentTabBar:self didRequestCloseTabAtIndex:sender.tag];
 }
 
 - (void)addClicked:(id)sender
